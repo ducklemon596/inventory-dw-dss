@@ -1,0 +1,12 @@
+{
+  "loaded_at_utc": "2026-11-06T14:54:13.096672+00:00",
+  "counts": {
+    "sales_raw": 649656,
+    "stock_raw": 804027,
+    "sales_lines": 649656,
+    "inventory_movements": 804027,
+    "products": 4385,
+    "invoices": 359121,
+    "warehouses": 2
+  }
+}
