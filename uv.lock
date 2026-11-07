@@ -16,14 +16,14 @@ version = "0.1.0"
 source = { editable = "." }
 
 [package.dev-dependencies]
-dev = [
+bootstrap = [
     { name = "pandas" },
 ]
 
 [package.metadata]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pandas", specifier = ">=3.1.1" }]
+bootstrap = [{ name = "pandas", specifier = ">=3.1.1,<4" }]
 
 [[package]]
 name = "numpy"

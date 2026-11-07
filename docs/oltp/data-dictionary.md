@@ -1,6 +1,6 @@
 # Báo cáo từ điển dữ liệu
 
-Báo cáo này mô tả các cột trong hai tệp CSV hiện có: `sales_raw.csv` (bán hàng) và `stock_raw.csv` (biến động tồn kho). Tên cột được giữ nguyên như trong tệp. Các ví dụ là giá trị thực đã có trong dữ liệu; ID nhân viên/khách hàng đã được ẩn danh.
+Từ điển này mô tả các cột trong hai tệp CSV hiện có: `sales_raw.csv` (bán hàng) và `stock_raw.csv` (biến động tồn kho). Tên cột được giữ nguyên như trong tệp. Các ví dụ là giá trị thực đã có trong dữ liệu; ID nhân viên/khách hàng đã được ẩn danh.
 
 ## `sales_raw.csv`
 
@@ -75,3 +75,13 @@ Báo cáo này mô tả các cột trong hai tệp CSV hiện có: `sales_raw.cs
 - Các tên nghiệp vụ trong `TransactionDescription`, phân loại và đơn vị dùng nhãn gốc của hệ thống POS; có thể có cách viết không đồng nhất.
 - Tệp sales có nhiều dòng cho một hóa đơn. Không xem `InvoiceNumber` là khóa duy nhất của từng dòng hàng.
 
+
+## Phạm vi ánh xạ vào OLTP
+
+- Sales ánh xạ 28/35 cột; stock ánh xạ đầy đủ 15/15 cột. Mã sản phẩm, hóa đơn, chứng từ, thu ngân, kho và đơn vị truy xuất qua FK; các thuộc tính giao dịch lưu trên line/movement.
+- Không đưa `PrescriptionNumber`, `PatientID`, `SalespersonID`, `TaxInvoiceNumber` vào OLTP theo quyết định cuối cùng. Các giá trị vẫn được giữ trong raw/processed và staging lịch sử; DW không đọc staging thay cho OLTP.
+- `DoctorID`, `SalesPromo`, `PromoName` toàn bộ trống trong nguồn hiện có và chưa được ánh xạ. Không tạo thực thể nghiệp vụ từ cột trống.
+- `DateTime` trở thành timestamp; các phần ngày/giờ tính lại được. `BatchAndExpiryDate` được giữ raw và tách sang product_batch. Bốn trường stock tách thành quantity và FK đơn vị. Tỷ lệ lưu numeric 0–100; `TaxAmount` nguồn là phần trăm nên ánh xạ `tax_pct`.
+- Tên/hãng/nhóm/category trên dòng giữ snapshot; product có tên và FK danh mục. Dấu `-` trong hãng/phân loại trở thành NULL. Không tự quy đổi đơn vị, khẳng định công thức tiền hoặc suy diễn batch cho stock.
+
+[Schema và ERD](schema.md) · [Luồng ingestion](ingestion.md). Dữ liệu gốc nằm trong `data/raw/`.

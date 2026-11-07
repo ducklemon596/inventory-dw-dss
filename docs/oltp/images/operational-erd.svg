@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1310" viewBox="0 0 1640 1310" role="img" aria-labelledby="title desc">
+<title id="title">OLTP schema: twelve tables with product catalogs</title>
+<desc id="desc">Arrows point from parent to child. Manufacturer, drug class and category optionally classify a product. Sales lines and inventory movements retain source row grain.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#52647c"/></marker></defs>
+<rect width="1640" height="1310" fill="#f3f6fb"/>
+<text x="40" y="40" font-family="sans-serif" font-size="26" font-weight="700">Operational database: product catalogs and transaction source rows</text>
+<text x="40" y="73" font-family="sans-serif" font-size="16">PK = primary key · FK = foreign key · UQ = unique · arrows: parent 1 → child 0..N</text>
+<path d="M250 215 V275 H650 V340" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="300" y="264" font-family="sans-serif" font-size="13" fill="#33465e">manufacturer_id?</text>
+<path d="M800 215 V340" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="810" y="302" font-family="sans-serif" font-size="13" fill="#33465e">drug_class_id?</text>
+<path d="M1350 215 V290 H950 V340" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1110" y="279" font-family="sans-serif" font-size="13" fill="#33465e">category_id?</text>
+<path d="M750 536 V650" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="760" y="615" font-family="sans-serif" font-size="13" fill="#33465e">product_id</text>
+<path d="M590 430 H510 V925 H390 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="412" y="904" font-family="sans-serif" font-size="13" fill="#33465e">product_id</text>
+<path d="M1010 450 H1080 V917 H1270 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1088" y="897" font-family="sans-serif" font-size="13" fill="#33465e">product_id</text>
+<path d="M590 745 H540 V945 H440 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="548" y="936" font-family="sans-serif" font-size="13" fill="#33465e">batch + product</text>
+<path d="M130 455 H20 V940 H90 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="28" y="925" font-family="sans-serif" font-size="13" fill="#33465e">cashier_id</text>
+<path d="M250 788 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="260" y="877" font-family="sans-serif" font-size="13" fill="#33465e">invoice_id</text>
+<path d="M1350 788 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1360" y="877" font-family="sans-serif" font-size="13" fill="#33465e">document_id</text>
+<path d="M1500 455 H1620 V945 H1540 V960" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1448" y="934" font-family="sans-serif" font-size="13" fill="#33465e">warehouse_id</text>
+<path d="M590 1030 H460" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="485" y="1015" font-family="sans-serif" font-size="13" fill="#33465e">unit_id</text>
+<path d="M1010 1030 H1140" fill="none" stroke="#52647c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1018" y="1015" font-family="sans-serif" font-size="13" fill="#33465e">4 unit FKs</text>
+<rect x="40" y="100" width="420" height="111" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="40" y="100" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="56" y="128" font-family="sans-serif" font-size="20" font-weight="700" fill="white">manufacturer</text>
+<text x="56" y="168" font-family="monospace" font-size="15" fill="#20364c">PK manufacturer_id</text>
+<text x="56" y="196" font-family="monospace" font-size="15" fill="#20364c">UQ manufacturer_name</text>
+<rect x="590" y="100" width="420" height="111" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="590" y="100" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="606" y="128" font-family="sans-serif" font-size="20" font-weight="700" fill="white">drug_class</text>
+<text x="606" y="168" font-family="monospace" font-size="15" fill="#20364c">PK drug_class_id</text>
+<text x="606" y="196" font-family="monospace" font-size="15" fill="#20364c">UQ drug_class_name</text>
+<rect x="1140" y="100" width="420" height="111" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="1140" y="100" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="1156" y="128" font-family="sans-serif" font-size="20" font-weight="700" fill="white">category</text>
+<text x="1156" y="168" font-family="monospace" font-size="15" fill="#20364c">PK category_id</text>
+<text x="1156" y="196" font-family="monospace" font-size="15" fill="#20364c">UQ category_name</text>
+<rect x="40" y="340" width="420" height="111" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="40" y="340" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="56" y="368" font-family="sans-serif" font-size="20" font-weight="700" fill="white">cashier</text>
+<text x="56" y="408" font-family="monospace" font-size="15" fill="#20364c">PK cashier_id</text>
+<text x="56" y="436" font-family="monospace" font-size="15" fill="#20364c">UQ source_code</text>
+<rect x="590" y="340" width="420" height="195" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="590" y="340" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="606" y="368" font-family="sans-serif" font-size="20" font-weight="700" fill="white">product</text>
+<text x="606" y="408" font-family="monospace" font-size="15" fill="#20364c">PK product_id / UQ drug_code</text>
+<text x="606" y="436" font-family="monospace" font-size="15" fill="#20364c">drug_name</text>
+<text x="606" y="464" font-family="monospace" font-size="15" fill="#20364c">FK manufacturer_id (nullable)</text>
+<text x="606" y="492" font-family="monospace" font-size="15" fill="#20364c">FK drug_class_id (nullable)</text>
+<text x="606" y="520" font-family="monospace" font-size="15" fill="#20364c">FK category_id (nullable)</text>
+<rect x="1140" y="340" width="420" height="111" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="1140" y="340" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="1156" y="368" font-family="sans-serif" font-size="20" font-weight="700" fill="white">warehouse</text>
+<text x="1156" y="408" font-family="monospace" font-size="15" fill="#20364c">PK warehouse_id</text>
+<text x="1156" y="436" font-family="monospace" font-size="15" fill="#20364c">UQ warehouse_name</text>
+<rect x="40" y="650" width="420" height="139" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="40" y="650" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="56" y="678" font-family="sans-serif" font-size="20" font-weight="700" fill="white">sales_invoice</text>
+<text x="56" y="718" font-family="monospace" font-size="15" fill="#20364c">PK invoice_id</text>
+<text x="56" y="746" font-family="monospace" font-size="15" fill="#20364c">UQ invoice_number</text>
+<text x="56" y="774" font-family="monospace" font-size="15" fill="#20364c">grain: source invoice code</text>
+<rect x="590" y="650" width="420" height="167" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="590" y="650" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="606" y="678" font-family="sans-serif" font-size="20" font-weight="700" fill="white">product_batch</text>
+<text x="606" y="718" font-family="monospace" font-size="15" fill="#20364c">PK batch_id / FK product_id</text>
+<text x="606" y="746" font-family="monospace" font-size="15" fill="#20364c">batch_number / expiry_date</text>
+<text x="606" y="774" font-family="monospace" font-size="15" fill="#20364c">UQ product + batch + expiry</text>
+<text x="606" y="802" font-family="monospace" font-size="15" fill="#20364c">NULL expiry compares equal</text>
+<rect x="1140" y="650" width="420" height="139" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="1140" y="650" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="1156" y="678" font-family="sans-serif" font-size="20" font-weight="700" fill="white">inventory_document</text>
+<text x="1156" y="718" font-family="monospace" font-size="15" fill="#20364c">PK document_id</text>
+<text x="1156" y="746" font-family="monospace" font-size="15" fill="#20364c">UQ document_number</text>
+<text x="1156" y="774" font-family="monospace" font-size="15" fill="#20364c">grain: source document code</text>
+<rect x="40" y="960" width="420" height="223" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="40" y="960" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="56" y="988" font-family="sans-serif" font-size="20" font-weight="700" fill="white">sales_line</text>
+<text x="56" y="1028" font-family="monospace" font-size="15" fill="#20364c">PK sales_line_id</text>
+<text x="56" y="1056" font-family="monospace" font-size="15" fill="#20364c">UQ source_dataset + row_number</text>
+<text x="56" y="1084" font-family="monospace" font-size="15" fill="#20364c">FK invoice / product / cashier / unit</text>
+<text x="56" y="1112" font-family="monospace" font-size="15" fill="#20364c">FK batch + product (batch optional)</text>
+<text x="56" y="1140" font-family="monospace" font-size="15" fill="#20364c">sold_at / quantity / unit_price</text>
+<text x="56" y="1168" font-family="monospace" font-size="15" fill="#20364c">line amounts + source snapshots</text>
+<rect x="590" y="960" width="420" height="139" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="590" y="960" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="606" y="988" font-family="sans-serif" font-size="20" font-weight="700" fill="white">unit</text>
+<text x="606" y="1028" font-family="monospace" font-size="15" fill="#20364c">PK unit_id</text>
+<text x="606" y="1056" font-family="monospace" font-size="15" fill="#20364c">UQ unit_code</text>
+<text x="606" y="1084" font-family="monospace" font-size="15" fill="#20364c">No inferred unit conversions</text>
+<rect x="1140" y="960" width="420" height="223" rx="10" fill="white" stroke="#b8c7d9"/>
+<rect x="1140" y="960" width="420" height="42" rx="8" fill="#174b72"/>
+<text x="1156" y="988" font-family="sans-serif" font-size="20" font-weight="700" fill="white">inventory_movement</text>
+<text x="1156" y="1028" font-family="monospace" font-size="15" fill="#20364c">PK movement_id</text>
+<text x="1156" y="1056" font-family="monospace" font-size="15" fill="#20364c">UQ source_dataset + row_number</text>
+<text x="1156" y="1084" font-family="monospace" font-size="15" fill="#20364c">FK document / product / warehouse</text>
+<text x="1156" y="1112" font-family="monospace" font-size="15" fill="#20364c">4 separate unit FKs</text>
+<text x="1156" y="1140" font-family="monospace" font-size="15" fill="#20364c">occurred_at / in / out / balances</text>
+<text x="1156" y="1168" font-family="monospace" font-size="15" fill="#20364c">No inferred batch or sales line FK</text>
+<text x="40" y="1260" font-family="sans-serif" font-size="15">Catalog labels are not source entity IDs. Transaction text attributes are historical source snapshots.</text>
+<text x="40" y="1288" font-family="sans-serif" font-size="15">Invoice/document headers group source codes; temporal and payment anomalies are documented in schema.md.</text></svg>

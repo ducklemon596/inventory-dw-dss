@@ -1,0 +1,2 @@
+RowNumber,DateTime,Warehouse,DrugCode,DrugName,DocumentNumber,TransactionDescription,InitialStock,StockIn,StockOut,RemainingStock,DrugClass,Category,DrugType,Status
+1,02 Jan 2023 07:55:43,Apotek,SW2106000281,Fasidol Forte Syr 60ml,PJ2301020001,Penjualan dengan No Faktur :PJ2301020001,17 Fls,0 Fls,1 Fls,16 Fls,-,Patent,NON KONSINYASI,Aktif

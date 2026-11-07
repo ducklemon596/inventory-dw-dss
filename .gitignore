@@ -1,10 +1,23 @@
-# Python-generated files
+# Python and build artifacts
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.egg-info/
 build/
 dist/
-wheels/
-*.egg-info
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Virtual environments
-.venv
+# Generated data, receipts and local state
+data/processed/
+reports/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+.DS_Store

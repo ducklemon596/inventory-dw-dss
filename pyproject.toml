@@ -1,7 +1,7 @@
 [project]
 name = "inventory-dw-dss"
 version = "0.1.0"
-description = "Add your description here"
+description = "Inventory data warehouse and decision support; OLTP is the source of record"
 readme = "README.md"
 authors = [
     { name = "ducklemon596", email = "thienquang050906@gmai.com" }
@@ -9,14 +9,12 @@ authors = [
 requires-python = ">=3.12"
 dependencies = []
 
+[dependency-groups]
+bootstrap = ["pandas>=3.1.1,<4"]
+
 [project.scripts]
-inventory-dw-dss = "inventory_dw_dss:main"
+inventory-dw-dss = "inventory_dw_dss.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
-
-[dependency-groups]
-dev = [
-    "pandas>=3.1.1",
-]
