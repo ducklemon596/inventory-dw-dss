@@ -6,7 +6,9 @@
 -- Idempotency: CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS and guarded
 -- constraints make repeat execution safe. Do not run load.sql before this file.
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 01 — create namespaces and compatibility metadata.
+-- -----------------------------------------------------------------------------
 -- `staging` contains loader support objects; `oltp` contains operational entities.
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS oltp;
@@ -16,7 +18,9 @@ CREATE TABLE IF NOT EXISTS staging.schema_migration (
  version text PRIMARY KEY, sha256 text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 02 — create product catalog entities.
+-- -----------------------------------------------------------------------------
 -- These lookup tables are shared by products; product foreign keys remain nullable
 -- because the source does not provide every label for every product.
 CREATE TABLE IF NOT EXISTS oltp.manufacturer (
@@ -59,7 +63,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 03 — create shared warehouse, unit, and cashier identities.
+-- -----------------------------------------------------------------------------
 -- Natural source codes/names are unique; generated IDs are internal FK targets.
 CREATE TABLE IF NOT EXISTS oltp.warehouse (
  warehouse_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -74,7 +80,9 @@ CREATE TABLE IF NOT EXISTS oltp.cashier (
  source_code text NOT NULL UNIQUE
 );
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 04 — create sales headers, product batches, and source lines.
+-- -----------------------------------------------------------------------------
 -- A batch belongs to one product. NULL expiry dates participate in the natural
 -- key as a single value, so the same product/batch without expiry is not duplicated.
 CREATE TABLE IF NOT EXISTS oltp.sales_invoice (
@@ -139,7 +147,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 05 — create inventory headers and source movements.
+-- -----------------------------------------------------------------------------
 -- A movement stores the source snapshot and its four quantity-unit pairs. It is
 -- deliberately not linked to a sales batch because the source does not establish
 -- a reliable movement-to-sale batch relationship.
@@ -185,7 +195,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 06 — perform the one-time product-catalog backfill for older databases.
+-- -----------------------------------------------------------------------------
 -- This reads labels already stored on transaction lines. It is skipped when the
 -- former catalog migration or this consolidated backfill marker is present.
 -- Conflicting labels for one DrugCode stop the schema transaction instead of

@@ -1,6 +1,6 @@
 # Mô hình operational database
 
-Đây là schema nguồn giao dịch cho kiến trúc `OLTP → Extraction → DuckDB → dbt → Data Marts → DSS`. Các thao tác chuẩn bị CSV và tạo database dưới đây thuộc [bootstrap tùy chọn](ingestion.md); DW vận hành đọc bảng `oltp.*` bằng kết nối database, không đọc CSV hoặc gọi bootstrap. Checkout hiện tại chưa có extraction/DuckDB/dbt/DSS.
+Đây là schema nguồn giao dịch cho kiến trúc `OLTP → Extraction → ClickHouse → dbt → Data Marts → DSS`. Các thao tác chuẩn bị CSV và tạo database dưới đây thuộc [bootstrap tùy chọn](ingestion.md); DW vận hành đọc bảng `oltp.*` bằng kết nối database, không đọc CSV hoặc gọi bootstrap. Compose chạy PostgreSQL và ClickHouse; Python extraction và dbt chạy qua `uv`. Pipeline sao chép 12 bảng OLTP sang ClickHouse raw, rồi dbt tạo 12 staging view. Mô hình chiều, marts và DSS chưa được triển khai. Xem [pipeline extraction](../extraction.md).
 
 Database PostgreSQL tái dựng giao dịch POS từ hai CSV, gồm **12 bảng OLTP** và một bảng metadata lịch sử. Hai bảng staging raw chỉ còn là snapshot lịch sử trên database cũ; bootstrap mới không tạo chúng. Toàn bộ schema hiện hành nằm trong một [tệp DDL idempotent](../../sql/oltp/schema.sql), nhóm theo shared entities, sales, inventory và catalog enrichment. Các khối SQL dưới đây mô tả cấu trúc; để triển khai, dùng loader thay vì chạy riêng từng khối.
 

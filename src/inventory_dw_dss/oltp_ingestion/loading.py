@@ -23,7 +23,7 @@ def database(root: Path):
     with tempfile.TemporaryDirectory(prefix='inventory-docker-') as config:
         Path(config, 'config.json').write_text('{}')
         base = ['docker', '--config', config, 'compose', '-p', 'inventory-dw-dss',
-                '-f', str(root / 'infra/docker-compose.oltp.yml')]
+                '-f', str(root / 'infra/docker-compose.yml')]
         subprocess.run(base + ['up', '-d', '--wait'], check=True)
         yield base + ['exec', '-T', 'db', 'psql', '-X', '-qAt', '-U', 'inventory',
                       '-d', 'inventory', '-v', 'ON_ERROR_STOP=1']

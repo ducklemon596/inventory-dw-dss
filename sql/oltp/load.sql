@@ -5,7 +5,9 @@
 -- for this transaction. Run after schema.sql and do not execute this file alone.
 -- All commands run inside one transaction; any raised exception rolls everything back.
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 01 — validate source keys.
+-- -----------------------------------------------------------------------------
 -- Each selected CSV row must have one source RowNumber per dataset. Duplicates
 -- would make the idempotent upsert ambiguous, so reject them before any writes.
 DO $$ BEGIN
@@ -15,13 +17,17 @@ DO $$ BEGIN
  END IF;
 END $$;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 02 — create missing product identities.
+-- -----------------------------------------------------------------------------
 -- Products can arrive in either feed; insert the union once and keep existing IDs.
 INSERT INTO oltp.product(drug_code)
 SELECT "DrugCode" FROM incoming_sales UNION SELECT "DrugCode" FROM incoming_stock
 ON CONFLICT DO NOTHING;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 03 — collect and validate product catalog observations.
+-- -----------------------------------------------------------------------------
 -- Combine labels from this run with the existing product master. Empty strings and
 -- '-' mean missing. A missing label does not erase a known master value; conflicting
 -- non-null labels for one drug code abort the transaction.
@@ -48,7 +54,10 @@ DO $$ BEGIN
  RAISE EXCEPTION 'Conflicting product attributes; resolve source data before loading';
  END IF;
 END $$;
+
+-- -----------------------------------------------------------------------------
 -- COMMAND 04 — upsert catalog labels and resolve product foreign keys.
+-- -----------------------------------------------------------------------------
 -- Insert only unseen labels, then update product master attributes from the
 -- validated observations. Transaction snapshots remain on their source rows.
 INSERT INTO oltp.manufacturer(manufacturer_name)
@@ -77,7 +86,9 @@ AND ROW(
  );
 DROP TABLE catalog_observation;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 05 — resolve shared natural-key entities.
+-- -----------------------------------------------------------------------------
 -- Insert missing warehouses, units, cashiers, invoices, and inventory documents.
 -- ON CONFLICT preserves existing surrogate IDs and allows detail FKs to resolve.
 INSERT INTO oltp.warehouse(warehouse_name)
@@ -96,7 +107,9 @@ SELECT DISTINCT "InvoiceNumber" FROM incoming_sales ON CONFLICT DO NOTHING;
 INSERT INTO oltp.inventory_document(document_number)
 SELECT DISTINCT "DocumentNumber" FROM incoming_stock ON CONFLICT DO NOTHING;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 06 — resolve product batches referenced by sales rows.
+-- -----------------------------------------------------------------------------
 -- Rows with no parsed batch number do not create a placeholder batch. The natural
 -- key includes expiry; the schema treats NULL expiry as a comparable key value.
 INSERT INTO oltp.product_batch(product_id, batch_number, expiry_date)
@@ -105,7 +118,9 @@ FROM incoming_sales s JOIN oltp.product p ON p.drug_code = s."DrugCode"
 WHERE NULLIF(s.batch_number, '') IS NOT NULL
 ON CONFLICT ON CONSTRAINT product_batch_natural_key DO NOTHING;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 07 — prepare per-run statistics.
+-- -----------------------------------------------------------------------------
 -- ANALYZE improves join estimates for the following temporary-table resolutions.
 -- `load_stats` records row counts and final reconciliation counts by dataset.
 ANALYZE incoming_sales;
@@ -115,7 +130,9 @@ CREATE TEMP TABLE load_stats (
  matched bigint DEFAULT 0
 ) ON COMMIT DROP;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 08 — resolve each incoming sales row to its OLTP foreign keys.
+-- -----------------------------------------------------------------------------
 -- The joins must produce exactly one candidate per input row; optional batch lookup
 -- can return NULL when the source row has no recognized batch.
 CREATE TEMP TABLE candidate_sales ON COMMIT DROP AS
@@ -166,7 +183,10 @@ DO $$ BEGIN
   RAISE EXCEPTION 'sales: input rows lost or multiplied during FK resolution';
  END IF;
 END $$;
+
+-- -----------------------------------------------------------------------------
 -- COMMAND 09 — classify sales rows before writing.
+-- -----------------------------------------------------------------------------
 -- Compare every persisted business attribute with the candidate. This separates
 -- inserts, changed rows, and identical rows without relying on aggregate totals.
 INSERT INTO load_stats(dataset, rows_read, inserted, updated, unchanged)
@@ -212,7 +232,9 @@ SELECT 'sales', count(*), count(*) FILTER (WHERE t.sales_line_id IS NULL),
 FROM candidate_sales n
 LEFT JOIN oltp.sales_line t USING (source_dataset, source_row_number);
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 10 — insert new sales rows or update changed sales rows.
+-- -----------------------------------------------------------------------------
 -- The scoped source key keeps sales_line_id stable. The WHERE clause suppresses
 -- no-op updates, so unchanged records retain their existing tuple version.
 INSERT INTO oltp.sales_line AS t (
@@ -289,7 +311,10 @@ WHERE ROW(
      excluded.payment_type, excluded.print_count, excluded.is_member, excluded.batch_id,
      excluded.shift_date, excluded.shift_period, excluded.shift_cashier_code, excluded.price_tier_number
  );
+
+-- -----------------------------------------------------------------------------
 -- COMMAND 11 — reconcile sales payloads after upsert.
+-- -----------------------------------------------------------------------------
 -- `matched` counts rows whose stored payload now equals the selected input payload.
 UPDATE load_stats SET matched = (
  SELECT count(*) FROM candidate_sales n JOIN oltp.sales_line t USING (source_dataset, source_row_number)
@@ -314,7 +339,9 @@ UPDATE load_stats SET matched = (
  )
 ) WHERE dataset = 'sales';
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 12 — resolve each incoming stock row to its OLTP foreign keys.
+-- -----------------------------------------------------------------------------
 -- Resolve document, product, warehouse, and all four units. A missing or ambiguous
 -- reference is detected by the candidate-count check immediately after this query.
 CREATE TEMP TABLE candidate_stock ON COMMIT DROP AS
@@ -356,7 +383,10 @@ DO $$ BEGIN
   RAISE EXCEPTION 'stock: input rows lost or multiplied during FK resolution';
  END IF;
 END $$;
+
+-- -----------------------------------------------------------------------------
 -- COMMAND 13 — classify inventory rows before writing.
+-- -----------------------------------------------------------------------------
 -- As for sales, compare all mapped payload fields to distinguish new, changed,
 -- and unchanged movements under the `(source_dataset, source_row_number)` key.
 INSERT INTO load_stats(dataset, rows_read, inserted, updated, unchanged)
@@ -394,7 +424,9 @@ SELECT 'stock', count(*), count(*) FILTER (WHERE t.movement_id IS NULL),
 FROM candidate_stock n
 LEFT JOIN oltp.inventory_movement t USING (source_dataset, source_row_number);
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 14 — insert new movements or update changed movements.
+-- -----------------------------------------------------------------------------
 -- Keep movement_id stable on conflict and skip writes when all mapped values match.
 INSERT INTO oltp.inventory_movement AS t (
  source_dataset, source_row_number, document_id, product_id,
@@ -450,7 +482,10 @@ WHERE ROW(
      excluded.out_unit_id, excluded.remaining_unit_id, excluded.transaction_type, excluded.supplier_name,
      excluded.referenced_invoice_number, excluded.patient_code
  );
+
+-- -----------------------------------------------------------------------------
 -- COMMAND 15 — reconcile inventory payloads after upsert.
+-- -----------------------------------------------------------------------------
 UPDATE load_stats SET matched = (
  SELECT count(*) FROM candidate_stock n JOIN oltp.inventory_movement t USING (source_dataset, source_row_number)
  WHERE ROW(
@@ -470,7 +505,9 @@ UPDATE load_stats SET matched = (
  )
 ) WHERE dataset = 'stock';
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 16 — enforce final reconciliation.
+-- -----------------------------------------------------------------------------
 -- Every selected row must match a target row, and the classified totals must equal
 -- rows read. Failure raises an exception and rolls back the complete load.
 DO $$ BEGIN
@@ -480,7 +517,9 @@ DO $$ BEGIN
  END IF;
 END $$;
 
+-- -----------------------------------------------------------------------------
 -- COMMAND 17 — return the machine-readable receipt to the Python loader.
+-- -----------------------------------------------------------------------------
 -- Dataset statistics describe only this run; totals describe the complete target
 -- tables after upsert. Python persists the receipt as a JSON report.
 SELECT json_build_object(

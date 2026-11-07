@@ -40,10 +40,10 @@ Load receipts are generated under ignored `reports/oltp_ingestion/` (`load_<run_
 ## Database and tests
 
 ```bash
-docker compose -p inventory-dw-dss -f infra/docker-compose.oltp.yml up -d --wait
-docker compose -p inventory-dw-dss -f infra/docker-compose.oltp.yml exec db psql -U inventory -d inventory
+docker compose -p inventory-dw-dss -f infra/docker-compose.yml up -d --wait db
+docker compose -p inventory-dw-dss -f infra/docker-compose.yml exec db psql -U inventory -d inventory
 # Stop while retaining data
-docker compose -p inventory-dw-dss -f infra/docker-compose.oltp.yml stop
+docker compose -p inventory-dw-dss -f infra/docker-compose.yml stop db
 
 uv run --group bootstrap python -m unittest discover -s tests/oltp_ingestion -p 'test_*.py' -v
 uv run --group bootstrap python tests/oltp_ingestion/integration.py

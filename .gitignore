@@ -13,8 +13,10 @@ htmlcov/
 # Generated data, receipts and local state
 data/processed/
 reports/
-*.duckdb
-*.duckdb.wal
+transform/dbt/target/
+transform/dbt/dbt_packages/
+transform/dbt/logs/
+transform/dbt/.user.yml
 *.sqlite
 *.sqlite3
 .env

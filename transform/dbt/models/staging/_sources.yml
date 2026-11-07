@@ -1,0 +1,400 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: '{{ env_var(''CLICKHOUSE_RAW_SCHEMA'', ''raw'') }}'
+    description: Pharmacy sales, stock movements and the product and operational records associated with them.
+
+    tables:
+      - name: manufacturer
+        description: Manufacturers associated with pharmaceutical products.
+
+        columns:
+          - name: manufacturer_id
+            description: Identifier of the product manufacturer.
+            data_type: String
+
+          - name: manufacturer_name
+            description: Name of the product manufacturer.
+            data_type: String
+
+      - name: drug_class
+        description: Drug classifications used to distinguish pharmaceutical products.
+
+        columns:
+          - name: drug_class_id
+            description: Identifier of the drug classification.
+            data_type: String
+
+          - name: drug_class_name
+            description: Name of the drug classification.
+            data_type: String
+
+      - name: category
+        description: Product categories used to organize the pharmacy assortment.
+
+        columns:
+          - name: category_id
+            description: Identifier of the product category.
+            data_type: String
+
+          - name: category_name
+            description: Name of the product category.
+            data_type: String
+
+      - name: product
+        description: Products offered or held by the pharmacy, with their names and catalog classifications.
+
+        columns:
+          - name: product_id
+            description: Identifier of the product.
+            data_type: String
+
+          - name: drug_code
+            description: Code used by the pharmacy to identify the product.
+            data_type: String
+
+          - name: drug_name
+            description: Name of the product.
+            data_type: Nullable(String)
+
+          - name: manufacturer_id
+            description: Identifier of the product manufacturer.
+            data_type: Nullable(String)
+
+          - name: drug_class_id
+            description: Identifier of the drug classification.
+            data_type: Nullable(String)
+
+          - name: category_id
+            description: Identifier of the product category.
+            data_type: Nullable(String)
+
+      - name: warehouse
+        description: Storage locations where pharmacy inventory is held.
+
+        columns:
+          - name: warehouse_id
+            description: Identifier of the storage location.
+            data_type: String
+
+          - name: warehouse_name
+            description: Name of the storage location.
+            data_type: String
+
+      - name: unit
+        description: Units used to express product sales and inventory quantities.
+
+        columns:
+          - name: unit_id
+            description: Identifier of the unit of measure.
+            data_type: String
+
+          - name: unit_code
+            description: Name or abbreviation of a unit of measure.
+            data_type: String
+
+      - name: cashier
+        description: Cashiers who record sales transactions.
+
+        columns:
+          - name: cashier_id
+            description: Identifier of the cashier who recorded the sale.
+            data_type: String
+
+          - name: source_code
+            description: Code identifying the cashier in the pharmacy system.
+            data_type: String
+
+      - name: sales_invoice
+        description: Sales invoices grouping the items recorded in a sale.
+
+        columns:
+          - name: invoice_id
+            description: Identifier of the sales invoice.
+            data_type: String
+
+          - name: invoice_number
+            description: Number assigned to the sales invoice.
+            data_type: String
+
+      - name: product_batch
+        description: Product batches distinguished by product, batch number and expiration date.
+
+        columns:
+          - name: batch_id
+            description: Identifier of the product batch.
+            data_type: String
+
+          - name: product_id
+            description: Identifier of the product.
+            data_type: String
+
+          - name: batch_number
+            description: Batch number assigned to the product lot.
+            data_type: String
+
+          - name: expiry_date
+            description: Expiration date of the product batch.
+            data_type: Nullable(String)
+
+      - name: sales_line
+        description: Individual product entries on sales invoices, including quantities, prices and recorded adjustments.
+
+        columns:
+          - name: sales_line_id
+            description: Identifier of an item entry on a sales invoice.
+            data_type: String
+
+          - name: source_dataset
+            description: Name of the dataset containing the transaction.
+            data_type: String
+
+          - name: source_row_number
+            description: Original record number within the transaction dataset.
+            data_type: String
+
+          - name: invoice_id
+            description: Identifier of the sales invoice.
+            data_type: String
+
+          - name: product_id
+            description: Identifier of the product.
+            data_type: String
+
+          - name: unit_id
+            description: Identifier of the unit used for the quantity sold.
+            data_type: String
+
+          - name: cashier_id
+            description: Identifier of the cashier who recorded the sale.
+            data_type: String
+
+          - name: sold_at
+            description: Date and time the sale was recorded.
+            data_type: String
+
+          - name: shift
+            description: Original designation of the sales shift.
+            data_type: Nullable(String)
+
+          - name: drug_name
+            description: Product name recorded with the transaction.
+            data_type: String
+
+          - name: manufacturer
+            description: Manufacturer recorded with the product sale.
+            data_type: Nullable(String)
+
+          - name: drug_class
+            description: Drug classification recorded with the transaction.
+            data_type: Nullable(String)
+
+          - name: category
+            description: Product category recorded with the transaction.
+            data_type: Nullable(String)
+
+          - name: batch_and_expiry_date
+            description: Original batch and expiration information recorded with the sale.
+            data_type: Nullable(String)
+
+          - name: quantity
+            description: Quantity of the product sold.
+            data_type: String
+
+          - name: unit_price
+            description: Selling price per unit of the product.
+            data_type: String
+
+          - name: price_tier
+            description: Selling price tier recorded with the sale.
+            data_type: Nullable(String)
+
+          - name: discount_pct
+            description: Discount percentage recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: discount_amount
+            description: Discount amount recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: service_fee
+            description: Service fee recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: packaging_fee
+            description: Packaging fee recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: subtotal
+            description: Subtotal recorded with the sales item before subsequent adjustments.
+            data_type: Nullable(String)
+
+          - name: invoice_discount_pct
+            description: Invoice discount percentage recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: promo_discount_pct
+            description: Promotional discount percentage recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: tax_pct
+            description: Tax percentage recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: additional_fee
+            description: Additional fee recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: total_price
+            description: Final amount recorded with the sales item.
+            data_type: Nullable(String)
+
+          - name: payment_type
+            description: Payment method recorded with the sale.
+            data_type: Nullable(String)
+
+          - name: print_count
+            description: Number of times the sales document was printed.
+            data_type: Nullable(String)
+
+          - name: is_member
+            description: Membership status recorded with the sale.
+            data_type: Nullable(String)
+
+          - name: batch_id
+            description: Identifier of the product batch.
+            data_type: Nullable(String)
+
+          - name: shift_date
+            description: Business date of the sales shift.
+            data_type: Nullable(String)
+
+          - name: shift_period
+            description: Period of the day assigned to the sales shift.
+            data_type: Nullable(String)
+
+          - name: shift_cashier_code
+            description: Cashier code recorded in the sales shift designation.
+            data_type: Nullable(String)
+
+          - name: price_tier_number
+            description: Number identifying the selling price tier.
+            data_type: Nullable(String)
+
+      - name: inventory_document
+        description: Inventory documents associated with stock movements.
+
+        columns:
+          - name: document_id
+            description: Identifier of the inventory document.
+            data_type: String
+
+          - name: document_number
+            description: Number assigned to the inventory document.
+            data_type: String
+
+      - name: inventory_movement
+        description: Individual stock movements for a product at a storage location, including quantities before
+          and after the movement.
+
+        columns:
+          - name: movement_id
+            description: Identifier of the inventory movement.
+            data_type: String
+
+          - name: source_dataset
+            description: Name of the dataset containing the transaction.
+            data_type: String
+
+          - name: source_row_number
+            description: Original record number within the transaction dataset.
+            data_type: String
+
+          - name: document_id
+            description: Identifier of the inventory document.
+            data_type: String
+
+          - name: product_id
+            description: Identifier of the product.
+            data_type: String
+
+          - name: warehouse_id
+            description: Identifier of the storage location.
+            data_type: String
+
+          - name: occurred_at
+            description: Date and time the stock movement was recorded.
+            data_type: String
+
+          - name: drug_name
+            description: Product name recorded with the transaction.
+            data_type: String
+
+          - name: drug_class
+            description: Drug classification recorded with the transaction.
+            data_type: Nullable(String)
+
+          - name: category
+            description: Product category recorded with the transaction.
+            data_type: Nullable(String)
+
+          - name: drug_type
+            description: Product ownership or consignment classification recorded with the movement.
+            data_type: Nullable(String)
+
+          - name: status
+            description: Product status recorded with the inventory movement.
+            data_type: Nullable(String)
+
+          - name: description
+            description: Original description of the inventory transaction.
+            data_type: Nullable(String)
+
+          - name: initial_stock
+            description: Stock quantity recorded before the movement.
+            data_type: String
+
+          - name: stock_in
+            description: Quantity received in the movement.
+            data_type: String
+
+          - name: stock_out
+            description: Quantity issued in the movement.
+            data_type: String
+
+          - name: remaining_stock
+            description: Stock quantity recorded after the movement.
+            data_type: String
+
+          - name: initial_unit_id
+            description: Unit used for the stock quantity before the movement.
+            data_type: String
+
+          - name: in_unit_id
+            description: Unit used for the received quantity.
+            data_type: String
+
+          - name: out_unit_id
+            description: Unit used for the issued quantity.
+            data_type: String
+
+          - name: remaining_unit_id
+            description: Unit used for the stock quantity after the movement.
+            data_type: String
+
+          - name: transaction_type
+            description: Type of inventory transaction.
+            data_type: Nullable(String)
+
+          - name: supplier_name
+            description: Supplier named in the inventory transaction description.
+            data_type: Nullable(String)
+
+          - name: referenced_invoice_number
+            description: Invoice number mentioned in the inventory transaction description.
+            data_type: Nullable(String)
+
+          - name: patient_code
+            description: Patient code mentioned in the inventory transaction description.
+            data_type: Nullable(String)

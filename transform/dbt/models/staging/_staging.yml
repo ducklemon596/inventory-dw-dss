@@ -1,0 +1,671 @@
+version: 2
+
+models:
+  - name: stg_manufacturers
+    description: Manufacturers associated with pharmaceutical products.
+
+    columns:
+      - name: manufacturer_id
+        description: Identifier of the product manufacturer.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: manufacturer_name
+        description: Name of the product manufacturer.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_drug_classes
+    description: Drug classifications used to distinguish pharmaceutical products.
+
+    columns:
+      - name: drug_class_id
+        description: Identifier of the drug classification.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: drug_class_name
+        description: Name of the drug classification.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_categories
+    description: Product categories used to organize the pharmacy assortment.
+
+    columns:
+      - name: category_id
+        description: Identifier of the product category.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: category_name
+        description: Name of the product category.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_products
+    description: Products offered or held by the pharmacy, with their names and catalog classifications.
+
+    columns:
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: product_code
+        description: Code used by the pharmacy to identify the product.
+        data_type: String
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: product_name
+        description: Name of the product.
+        data_type: Nullable(String)
+
+      - name: manufacturer_id
+        description: Identifier of the product manufacturer.
+        data_type: Nullable(UInt32)
+
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_manufacturers')
+                field: manufacturer_id
+
+      - name: drug_class_id
+        description: Identifier of the drug classification.
+        data_type: Nullable(UInt32)
+
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_drug_classes')
+                field: drug_class_id
+
+      - name: category_id
+        description: Identifier of the product category.
+        data_type: Nullable(UInt32)
+
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_categories')
+                field: category_id
+
+  - name: stg_warehouses
+    description: Storage locations where pharmacy inventory is held.
+
+    columns:
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: warehouse_name
+        description: Name of the storage location.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_units
+    description: Units used to express product sales and inventory quantities.
+
+    columns:
+      - name: unit_id
+        description: Identifier of the unit of measure.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: unit_code
+        description: Name or abbreviation of a unit of measure.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_cashiers
+    description: Cashiers who record sales transactions.
+
+    columns:
+      - name: cashier_id
+        description: Identifier of the cashier who recorded the sale.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: cashier_code
+        description: Code identifying the cashier in the pharmacy system.
+        data_type: String
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_sales_invoices
+    description: Sales invoices grouping the items recorded in a sale.
+
+    columns:
+      - name: sales_invoice_id
+        description: Identifier of the sales invoice.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: sales_invoice_number
+        description: Number assigned to the sales invoice.
+        data_type: String
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_product_batches
+    description: Product batches distinguished by product, batch number and expiration date.
+
+    columns:
+      - name: product_batch_id
+        description: Identifier of the product batch.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+      - name: product_batch_number
+        description: Batch number assigned to the product lot.
+        data_type: Nullable(String)
+
+      - name: expiration_date
+        description: Expiration date of the product batch.
+        data_type: Nullable(Date32)
+
+  - name: stg_sales_invoice_lines
+    description: Individual product entries on sales invoices, including quantities, prices and recorded adjustments.
+
+    columns:
+      - name: sales_invoice_line_id
+        description: Identifier of an item entry on a sales invoice.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: dataset_name
+        description: Name of the dataset containing the transaction.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+
+      - name: dataset_row_number
+        description: Original record number within the transaction dataset.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+
+      - name: sales_invoice_id
+        description: Identifier of the sales invoice.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_sales_invoices')
+                field: sales_invoice_id
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+      - name: unit_id
+        description: Identifier of the unit used for the quantity sold.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: cashier_id
+        description: Identifier of the cashier who recorded the sale.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_cashiers')
+                field: cashier_id
+
+      - name: sold_at
+        description: Date and time the sale was recorded.
+        data_type: DateTime64(6)
+
+        data_tests:
+          - not_null
+
+      - name: shift_label
+        description: Original designation of the sales shift.
+        data_type: Nullable(String)
+
+      - name: product_name
+        description: Product name recorded with the transaction.
+        data_type: String
+
+        data_tests:
+          - not_null
+
+      - name: manufacturer_name
+        description: Manufacturer recorded with the product sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: drug_class_name
+        description: Drug classification recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_name
+        description: Product category recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: product_batch_label
+        description: Original batch and expiration information recorded with the sale.
+        data_type: Nullable(String)
+
+      - name: sold_quantity
+        description: Quantity of the product sold.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: unit_price
+        description: Selling price per unit of the product.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: price_tier_label
+        description: Selling price tier recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: discount_percentage
+        description: Discount percentage recorded with the sales item.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: discount_amount
+        description: Discount amount recorded with the sales item.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: service_fee_amount
+        description: Service fee recorded with the sales item.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: packaging_fee_amount
+        description: Packaging fee recorded with the sales item.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: subtotal_amount
+        description: Subtotal recorded with the sales item before subsequent adjustments.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: invoice_discount_percentage
+        description: Invoice discount percentage recorded with the sales item.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: promotional_discount_percentage
+        description: Promotional discount percentage recorded with the sales item.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: tax_percentage
+        description: Tax percentage recorded with the sales item.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: additional_fee_amount
+        description: Additional fee recorded with the sales item.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: total_amount
+        description: Final amount recorded with the sales item.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: payment_method
+        description: Payment method recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - TUNAI
+                  - KARTU
+                  - KREDIT
+
+      - name: document_print_count
+        description: Number of times the sales document was printed.
+        data_type: Nullable(UInt16)
+
+      - name: membership_status
+        description: Membership status recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - NON MEMBER
+                  - MEMBER
+
+      - name: product_batch_id
+        description: Identifier of the product batch.
+        data_type: Nullable(UInt32)
+
+      - name: shift_date
+        description: Business date of the sales shift.
+        data_type: Nullable(Date32)
+
+      - name: shift_period
+        description: Period of the day assigned to the sales shift.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - PAGI
+                  - SORE
+
+      - name: shift_cashier_code
+        description: Cashier code recorded in the sales shift designation.
+        data_type: Nullable(String)
+
+      - name: price_tier_number
+        description: Number identifying the selling price tier.
+        data_type: Nullable(UInt8)
+
+  - name: stg_inventory_documents
+    description: Inventory documents associated with stock movements.
+
+    columns:
+      - name: inventory_document_id
+        description: Identifier of the inventory document.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: inventory_document_number
+        description: Number assigned to the inventory document.
+        data_type: String
+
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_inventory_movements
+    description: Individual stock movements for a product at a storage location, including quantities before and
+      after the movement.
+
+    columns:
+      - name: inventory_movement_id
+        description: Identifier of the inventory movement.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - unique
+
+      - name: dataset_name
+        description: Name of the dataset containing the transaction.
+        data_type: LowCardinality(String)
+
+        data_tests:
+          - not_null
+
+      - name: dataset_row_number
+        description: Original record number within the transaction dataset.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+
+      - name: inventory_document_id
+        description: Identifier of the inventory document.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_inventory_documents')
+                field: inventory_document_id
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_warehouses')
+                field: warehouse_id
+
+      - name: movement_at
+        description: Date and time the stock movement was recorded.
+        data_type: DateTime64(6)
+
+        data_tests:
+          - not_null
+
+      - name: product_name
+        description: Product name recorded with the transaction.
+        data_type: String
+
+        data_tests:
+          - not_null
+
+      - name: drug_class_name
+        description: Drug classification recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_name
+        description: Product category recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: consignment_status
+        description: Product ownership or consignment classification recorded with the movement.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - NON KONSINYASI
+                  - KONSINYASI
+
+      - name: product_status
+        description: Product status recorded with the inventory movement.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - AKTIF
+
+      - name: transaction_description
+        description: Original description of the inventory transaction.
+        data_type: Nullable(String)
+
+      - name: opening_stock_quantity
+        description: Stock quantity recorded before the movement.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: received_quantity
+        description: Quantity received in the movement.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: issued_quantity
+        description: Quantity issued in the movement.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: closing_stock_quantity
+        description: Stock quantity recorded after the movement.
+        data_type: Decimal(18, 6)
+
+        data_tests:
+          - not_null
+
+      - name: opening_stock_unit_id
+        description: Unit used for the stock quantity before the movement.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: received_unit_id
+        description: Unit used for the received quantity.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: issued_unit_id
+        description: Unit used for the issued quantity.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: closing_stock_unit_id
+        description: Unit used for the stock quantity after the movement.
+        data_type: UInt32
+
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: transaction_type
+        description: Type of inventory transaction.
+        data_type: LowCardinality(Nullable(String))
+
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - SALE
+                  - TRANSFER
+                  - PURCHASE
+                  - UNKNOWN
+                  - IMPORT_STOCKTAKE
+                  - IMPORT_PRODUCT
+                  - RETURN
+                  - CREATE_PRODUCT
+
+      - name: supplier_name
+        description: Supplier named in the inventory transaction description.
+        data_type: Nullable(String)
+
+      - name: referenced_sales_invoice_number
+        description: Invoice number mentioned in the inventory transaction description.
+        data_type: Nullable(String)
+
+      - name: patient_code
+        description: Patient code mentioned in the inventory transaction description.
+        data_type: Nullable(String)
