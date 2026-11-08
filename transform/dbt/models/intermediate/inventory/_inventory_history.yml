@@ -1,0 +1,461 @@
+version: 2
+models:
+- name: int_inventory_ledger_ordered
+  description: Recorded inventory movements with their preceding observations and continuity conditions.
+  config:
+    meta:
+      grain: &id001
+      - inventory_movement_id
+      limitations:
+      - Export order describes recorded observations, not certified physical or available stock.
+      - Separate export scopes must not be combined as one ledger.
+  columns:
+  - name: inventory_movement_id
+    description: Identifier of the inventory movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: dataset_name
+    description: Name of the dataset containing the transaction.
+    data_type: LowCardinality(String)
+    data_tests:
+    - not_null
+  - name: dataset_row_number
+    description: Original record number within the transaction dataset.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: inventory_document_id
+    description: Identifier of the inventory document.
+    data_type: UInt32
+  - name: inventory_document_number
+    description: Number assigned to the inventory document.
+    data_type: Nullable(String)
+  - name: product_id
+    description: Identifier of the product.
+    data_type: UInt32
+  - name: product_code
+    description: Code used by the pharmacy to identify the product.
+    data_type: Nullable(String)
+  - name: warehouse_id
+    description: Identifier of the storage location.
+    data_type: UInt32
+  - name: warehouse_name
+    description: Name of the storage location where the movement was recorded.
+    data_type: LowCardinality(Nullable(String))
+  - name: movement_at
+    description: Date and time the stock movement was recorded.
+    data_type: DateTime64(6)
+  - name: movement_date
+    description: Calendar date on which the inventory movement was recorded.
+    data_type: Date32
+  - name: product_name
+    description: Product name recorded with the transaction.
+    data_type: String
+  - name: drug_class_name
+    description: Drug classification recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: category_name
+    description: Product category recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: consignment_status
+    description: Product ownership or consignment classification recorded with the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: product_status
+    description: Product status recorded with the inventory movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_type
+    description: Type of inventory transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_description
+    description: Original description of the inventory transaction.
+    data_type: Nullable(String)
+  - name: supplier_name
+    description: Supplier named in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: referenced_sales_invoice_number
+    description: Invoice number mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: patient_code
+    description: Patient code mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: opening_stock_quantity
+    description: Stock quantity recorded before the movement.
+    data_type: Decimal(18, 6)
+  - name: received_quantity
+    description: Quantity received in the movement.
+    data_type: Decimal(18, 6)
+  - name: issued_quantity
+    description: Quantity issued in the movement.
+    data_type: Decimal(18, 6)
+  - name: closing_stock_quantity
+    description: Stock quantity recorded after the movement.
+    data_type: Decimal(18, 6)
+  - name: opening_stock_unit_id
+    description: Unit used for the stock quantity before the movement.
+    data_type: UInt32
+  - name: opening_stock_unit_code
+    description: Unit used for the stock quantity before the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: received_unit_id
+    description: Unit used for the received quantity.
+    data_type: UInt32
+  - name: received_unit_code
+    description: Unit used for the quantity received.
+    data_type: LowCardinality(Nullable(String))
+  - name: issued_unit_id
+    description: Unit used for the issued quantity.
+    data_type: UInt32
+  - name: issued_unit_code
+    description: Unit used for the quantity issued.
+    data_type: LowCardinality(Nullable(String))
+  - name: closing_stock_unit_id
+    description: Unit used for the stock quantity after the movement.
+    data_type: UInt32
+  - name: closing_stock_unit_code
+    description: Unit used for the stock quantity after the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: recorded_delta_qty
+    description: Recorded quantity received less recorded quantity issued, in the movement unit.
+    data_type: Decimal(18, 6)
+  - name: has_negative_opening_stock
+    description: Whether the recorded opening stock quantity is below zero.
+    data_type: UInt8
+  - name: has_negative_closing_stock
+    description: Whether the recorded closing stock quantity is below zero.
+    data_type: UInt8
+  - name: is_unknown_movement
+    description: Whether the recorded inventory transaction classification is UNKNOWN.
+    data_type: UInt8
+  - name: previous_movement_id
+    data_type: Nullable(UInt32)
+    description: Identifier of the preceding recorded inventory movement.
+  - name: previous_source_sequence
+    data_type: Nullable(UInt32)
+    description: Export sequence of the preceding recorded movement.
+  - name: previous_movement_at
+    data_type: Nullable(DateTime64(6))
+    description: Time recorded for the preceding movement.
+  - name: previous_closing_quantity
+    data_type: Nullable(Decimal(18, 6))
+    description: Closing quantity recorded on the preceding movement.
+  - name: previous_closing_unit_id
+    data_type: Nullable(UInt32)
+    description: Unit of the preceding recorded closing quantity.
+  - name: previous_transaction_description
+    data_type: Nullable(String)
+    description: Description recorded for the preceding movement.
+  - name: continuity_delta_qty
+    data_type: Nullable(Decimal(18, 6))
+    description: Current opening quantity less the preceding recorded closing quantity.
+  - name: is_ledger_start
+    data_type: UInt8
+    description: Whether this is the first observed movement for the product and warehouse in the export.
+  - name: is_discontinuity
+    data_type: UInt8
+    description: Whether the opening quantity differs from the preceding recorded closing quantity.
+  - name: is_continuous
+    data_type: UInt8
+    description: Whether the opening quantity equals the preceding recorded closing quantity.
+  - name: boundary_reason
+    data_type: String
+    description: Reason the movement begins a ledger or a new continuity segment, or indicates continuity.
+  data_tests:
+  - unique_grain:
+      arguments:
+        columns: *id001
+  - preserves_source_rows:
+      arguments:
+        source_relation: ref('int_inventory_movements_enriched')
+        primary_key: inventory_movement_id
+- name: int_inventory_segments
+  description: Recorded inventory movements grouped into locally anchored continuity segments.
+  config:
+    meta:
+      grain: &id002
+      - inventory_movement_id
+      limitations:
+      - Export order describes recorded observations, not certified physical or available stock.
+      - Separate export scopes must not be combined as one ledger.
+  columns:
+  - name: inventory_movement_id
+    description: Identifier of the inventory movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: dataset_name
+    description: Name of the dataset containing the transaction.
+    data_type: LowCardinality(String)
+    data_tests:
+    - not_null
+  - name: dataset_row_number
+    description: Original record number within the transaction dataset.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: inventory_document_id
+    description: Identifier of the inventory document.
+    data_type: UInt32
+  - name: inventory_document_number
+    description: Number assigned to the inventory document.
+    data_type: Nullable(String)
+  - name: product_id
+    description: Identifier of the product.
+    data_type: UInt32
+  - name: product_code
+    description: Code used by the pharmacy to identify the product.
+    data_type: Nullable(String)
+  - name: warehouse_id
+    description: Identifier of the storage location.
+    data_type: UInt32
+  - name: warehouse_name
+    description: Name of the storage location where the movement was recorded.
+    data_type: LowCardinality(Nullable(String))
+  - name: movement_at
+    description: Date and time the stock movement was recorded.
+    data_type: DateTime64(6)
+  - name: movement_date
+    description: Calendar date on which the inventory movement was recorded.
+    data_type: Date32
+  - name: product_name
+    description: Product name recorded with the transaction.
+    data_type: String
+  - name: drug_class_name
+    description: Drug classification recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: category_name
+    description: Product category recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: consignment_status
+    description: Product ownership or consignment classification recorded with the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: product_status
+    description: Product status recorded with the inventory movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_type
+    description: Type of inventory transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_description
+    description: Original description of the inventory transaction.
+    data_type: Nullable(String)
+  - name: supplier_name
+    description: Supplier named in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: referenced_sales_invoice_number
+    description: Invoice number mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: patient_code
+    description: Patient code mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: opening_stock_quantity
+    description: Stock quantity recorded before the movement.
+    data_type: Decimal(18, 6)
+  - name: received_quantity
+    description: Quantity received in the movement.
+    data_type: Decimal(18, 6)
+  - name: issued_quantity
+    description: Quantity issued in the movement.
+    data_type: Decimal(18, 6)
+  - name: closing_stock_quantity
+    description: Stock quantity recorded after the movement.
+    data_type: Decimal(18, 6)
+  - name: opening_stock_unit_id
+    description: Unit used for the stock quantity before the movement.
+    data_type: UInt32
+  - name: opening_stock_unit_code
+    description: Unit used for the stock quantity before the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: received_unit_id
+    description: Unit used for the received quantity.
+    data_type: UInt32
+  - name: received_unit_code
+    description: Unit used for the quantity received.
+    data_type: LowCardinality(Nullable(String))
+  - name: issued_unit_id
+    description: Unit used for the issued quantity.
+    data_type: UInt32
+  - name: issued_unit_code
+    description: Unit used for the quantity issued.
+    data_type: LowCardinality(Nullable(String))
+  - name: closing_stock_unit_id
+    description: Unit used for the stock quantity after the movement.
+    data_type: UInt32
+  - name: closing_stock_unit_code
+    description: Unit used for the stock quantity after the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: recorded_delta_qty
+    description: Recorded quantity received less recorded quantity issued, in the movement unit.
+    data_type: Decimal(18, 6)
+  - name: has_negative_opening_stock
+    description: Whether the recorded opening stock quantity is below zero.
+    data_type: UInt8
+  - name: has_negative_closing_stock
+    description: Whether the recorded closing stock quantity is below zero.
+    data_type: UInt8
+  - name: is_unknown_movement
+    description: Whether the recorded inventory transaction classification is UNKNOWN.
+    data_type: UInt8
+  - name: previous_movement_id
+    data_type: Nullable(UInt32)
+    description: Identifier of the preceding recorded inventory movement.
+  - name: previous_source_sequence
+    data_type: Nullable(UInt32)
+    description: Export sequence of the preceding recorded movement.
+  - name: previous_movement_at
+    data_type: Nullable(DateTime64(6))
+    description: Time recorded for the preceding movement.
+  - name: previous_closing_quantity
+    data_type: Nullable(Decimal(18, 6))
+    description: Closing quantity recorded on the preceding movement.
+  - name: previous_closing_unit_id
+    data_type: Nullable(UInt32)
+    description: Unit of the preceding recorded closing quantity.
+  - name: previous_transaction_description
+    data_type: Nullable(String)
+    description: Description recorded for the preceding movement.
+  - name: continuity_delta_qty
+    data_type: Nullable(Decimal(18, 6))
+    description: Current opening quantity less the preceding recorded closing quantity.
+  - name: is_ledger_start
+    data_type: UInt8
+    description: Whether this is the first observed movement for the product and warehouse in the export.
+  - name: is_discontinuity
+    data_type: UInt8
+    description: Whether the opening quantity differs from the preceding recorded closing quantity.
+  - name: is_continuous
+    data_type: UInt8
+    description: Whether the opening quantity equals the preceding recorded closing quantity.
+  - name: boundary_reason
+    data_type: String
+    description: Reason the movement begins a ledger or a new continuity segment, or indicates continuity.
+  - name: segment_start_sequence
+    data_type: UInt32
+    description: Export sequence of the first movement in the continuity segment.
+  - name: segment_id
+    data_type: String
+    description: Identifier of a continuity segment within an export, product and warehouse.
+    data_tests:
+    - not_null
+  - name: segment_end_sequence
+    data_type: UInt32
+    description: Export sequence of the last movement in the continuity segment.
+  - name: segment_opening_quantity
+    data_type: Decimal(18, 6)
+    description: Opening quantity recorded on the first movement of the continuity segment.
+  - name: segment_started_at
+    data_type: DateTime64(6)
+    description: Time recorded on the first movement in the segment.
+  - name: segment_ended_at
+    data_type: DateTime64(6)
+    description: Time recorded on the last movement in the segment.
+  - name: segment_boundary_reason
+    data_type: String
+    description: Recorded continuity condition that starts the segment.
+  - name: segment_cumulative_delta_qty
+    data_type: Decimal(38, 6)
+    description: Cumulative recorded receipts less issues within the segment through this movement.
+  - name: reconstructed_closing_quantity
+    data_type: Decimal(38, 6)
+    description: Segment opening quantity plus recorded receipts less issues through this movement.
+  data_tests:
+  - unique_grain:
+      arguments:
+        columns: *id002
+  - preserves_source_rows:
+      arguments:
+        source_relation: ref('int_inventory_ledger_ordered')
+        primary_key: inventory_movement_id
+- name: diag_inventory_ledger_discontinuities
+  description: Observed differences between consecutive recorded closing and opening stock quantities.
+  config:
+    meta:
+      grain: &id003
+      - inventory_movement_id
+      limitations:
+      - Export order describes recorded observations, not certified physical or available stock.
+      - Separate export scopes must not be combined as one ledger.
+  columns:
+  - name: dataset_name
+    description: Name of the dataset containing the transaction.
+    data_type: LowCardinality(String)
+    data_tests:
+    - not_null
+  - name: product_id
+    description: Identifier of the product.
+    data_type: UInt32
+  - name: warehouse_id
+    description: Identifier of the storage location.
+    data_type: UInt32
+  - name: inventory_movement_id
+    description: Identifier of the inventory movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: previous_movement_id
+    data_type: Nullable(UInt32)
+    description: Identifier of the preceding recorded inventory movement.
+  - name: dataset_row_number
+    description: Original record number within the transaction dataset.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: previous_source_sequence
+    data_type: Nullable(UInt32)
+    description: Export sequence of the preceding recorded movement.
+  - name: movement_date
+    description: Calendar date on which the inventory movement was recorded.
+    data_type: Date32
+  - name: movement_at
+    description: Date and time the stock movement was recorded.
+    data_type: DateTime64(6)
+  - name: previous_movement_at
+    data_type: Nullable(DateTime64(6))
+    description: Time recorded for the preceding movement.
+  - name: previous_closing_quantity
+    data_type: Nullable(Decimal(18, 6))
+    description: Closing quantity recorded on the preceding movement.
+  - name: opening_stock_quantity
+    description: Stock quantity recorded before the movement.
+    data_type: Decimal(18, 6)
+  - name: continuity_delta_qty
+    data_type: Nullable(Decimal(18, 6))
+    description: Current opening quantity less the preceding recorded closing quantity.
+  - name: stock_unit_id
+    data_type: UInt32
+    description: Unit of the recorded stock quantity.
+  - name: transaction_type
+    description: Type of inventory transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_description
+    description: Original description of the inventory transaction.
+    data_type: Nullable(String)
+  - name: previous_transaction_description
+    data_type: Nullable(String)
+    description: Description recorded for the preceding movement.
+  - name: segment_id
+    data_type: String
+    description: Identifier of a continuity segment within an export, product and warehouse.
+    data_tests:
+    - not_null
+  - name: previous_segment_id
+    data_type: Nullable(String)
+    description: Continuity segment of the preceding recorded movement.
+  - name: segment_start_sequence
+    data_type: UInt32
+    description: Export sequence of the first movement in the continuity segment.
+  - name: segment_end_sequence
+    data_type: UInt32
+    description: Export sequence of the last movement in the continuity segment.
+  - name: segment_boundary_reason
+    data_type: String
+    description: Recorded continuity condition that starts the segment.
+  - name: diagnostic_class
+    data_type: String
+    description: Whether the descriptions adjacent to the gap mention a stock count.
+  - name: diagnostic_evidence
+    data_type: String
+    description: Observed evidence used to describe the gap.
+  data_tests:
+  - unique_grain:
+      arguments:
+        columns: *id003

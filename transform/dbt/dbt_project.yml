@@ -15,10 +15,39 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+vars:
+  uom_mapping_version: uom_mapping_v2_2026-11-08
+
+seeds:
+  inventory_dw:
+    uom_conversion_mapping:
+      +column_types:
+        product_id: String
+        sales_unit: String
+        stock_unit: String
+        tier: LowCardinality(String)
+        approval_status: LowCardinality(String)
+        factor_approved: Nullable(Decimal(18, 6))
+        factor_candidate: Nullable(Decimal(18, 6))
+        n_supporting_invoices: UInt32
+        share_at_mode: Decimal(38, 18)
+        price_ratio: Nullable(Decimal(38, 18))
+        price_check_within_15pct: Bool
+        evidence_source: String
+        mapping_version: LowCardinality(String)
+
 models:
   inventory_dw:
     staging:
       +materialized: view
+    intermediate:
+      +materialized: view
+      +query_settings:
+        join_use_nulls: 1
+    marts:
+      +materialized: table
+      +query_settings:
+        join_use_nulls: 1
     +persist_docs:
       relation: true
       columns: true

@@ -1,0 +1,132 @@
+version: 2
+unit_tests:
+- name: sales_enrichment_keeps_line_values_and_missing_batches
+  description: Recorded line times, descriptions and zero amounts remain intact when a batch is absent.
+  model: int_sales_lines_enriched
+  given:
+  - input: ref('stg_sales_invoice_lines')
+    rows:
+    - sales_invoice_line_id: 1
+      dataset_name: fixture
+      dataset_row_number: 11
+      sales_invoice_id: 1
+      product_id: 1
+      unit_id: 1
+      cashier_id: 1
+      sold_at: '2024-02-29 10:00:00.123456'
+      product_name: Historical name
+      product_batch_id: null
+      sold_quantity: '1.000001'
+      total_amount: '0.000000'
+    - sales_invoice_line_id: 2
+      dataset_name: fixture
+      dataset_row_number: 12
+      sales_invoice_id: 1
+      product_id: 1
+      unit_id: 1
+      cashier_id: 1
+      sold_at: '2024-02-29 11:00:00.654321'
+      product_name: Historical name
+      product_batch_id: 1
+      sold_quantity: '2.000002'
+      total_amount: '25.123456'
+  - input: ref('stg_sales_invoices')
+    rows:
+    - sales_invoice_id: 1
+      sales_invoice_number: INV001
+  - input: ref('stg_products')
+    rows:
+    - product_id: 1
+      product_code: '0001'
+      product_name: Current catalog name
+  - input: ref('stg_units')
+    rows:
+    - unit_id: 1
+      unit_code: Tab
+  - input: ref('stg_cashiers')
+    rows:
+    - cashier_id: 1
+      cashier_code: Cashier_001
+  - input: ref('stg_product_batches')
+    rows:
+    - product_batch_id: 1
+      product_id: 1
+      product_batch_number: '00001'
+      expiration_date: '2025-01-01'
+  expect:
+    rows:
+    - sales_invoice_line_id: 1
+      dataset_row_number: 11
+      sales_invoice_number: INV001
+      product_code: '0001'
+      unit_code: Tab
+      cashier_code: Cashier_001
+      sold_at: '2024-02-29 10:00:00.123456'
+      sold_date: '2024-02-29'
+      product_name: Historical name
+      product_batch_number: null
+      expiration_date: null
+      sold_quantity: '1.000001'
+      total_amount: '0.000000'
+    - sales_invoice_line_id: 2
+      dataset_row_number: 12
+      sales_invoice_number: INV001
+      product_code: '0001'
+      unit_code: Tab
+      cashier_code: Cashier_001
+      sold_at: '2024-02-29 11:00:00.654321'
+      sold_date: '2024-02-29'
+      product_name: Historical name
+      product_batch_number: '00001'
+      expiration_date: '2025-01-01'
+      sold_quantity: '2.000002'
+      total_amount: '25.123456'
+- name: daily_sales_separates_units_and_preserves_decimal_quantities
+  description: Quantities in different units remain separate and dates without recorded sales remain absent.
+  model: int_sales_daily_observed
+  given:
+  - input: ref('int_sales_lines_enriched')
+    rows:
+    - product_id: 1
+      sold_date: '2024-02-29'
+      unit_id: 1
+      sold_quantity: '1.000001'
+      sold_at: '2024-02-29 10:00:00.123456'
+    - product_id: 1
+      sold_date: '2024-02-29'
+      unit_id: 1
+      sold_quantity: '2.000002'
+      sold_at: '2024-02-29 11:00:00.654321'
+    - product_id: 1
+      sold_date: '2024-02-29'
+      unit_id: 2
+      sold_quantity: '2.000000'
+      sold_at: '2024-02-29 12:00:00.000000'
+    - product_id: 1
+      sold_date: '2024-03-02'
+      unit_id: 1
+      sold_quantity: '4.000000'
+      sold_at: '2024-03-02 09:00:00.000000'
+  expect:
+    rows:
+    - product_id: 1
+      sold_date: '2024-02-29'
+      unit_id: 1
+      recorded_sold_quantity: '3.000003'
+      sales_line_count: 2
+      first_sold_at: '2024-02-29 10:00:00.123456'
+      last_sold_at: '2024-02-29 11:00:00.654321'
+    - product_id: 1
+      sold_date: '2024-02-29'
+      unit_id: 2
+      recorded_sold_quantity: '2.000000'
+      sales_line_count: 1
+      first_sold_at: '2024-02-29 12:00:00.000000'
+      last_sold_at: '2024-02-29 12:00:00.000000'
+    - product_id: 1
+      sold_date: '2024-03-02'
+      unit_id: 1
+      recorded_sold_quantity: '4.000000'
+      sales_line_count: 1
+      first_sold_at: '2024-03-02 09:00:00.000000'
+      last_sold_at: '2024-03-02 09:00:00.000000'

@@ -1,0 +1,244 @@
+version: 2
+models:
+- name: int_inventory_movements_enriched
+  description: Recorded inventory movements with document, product, location and unit details, quantity
+    changes and negative stock indicators.
+  config:
+    meta:
+      grain:
+      - inventory_movement_id
+      upstream_models:
+      - stg_inventory_movements
+      - stg_inventory_documents
+      - stg_products
+      - stg_warehouses
+      - stg_units
+      approved_decisions:
+      - I-02
+      - I-03
+      limitations:
+      - All source movements, classifications, returns and negative balances are retained.
+      - Recorded delta is received_quantity minus issued_quantity; unit equality is tested.
+      - Line-level balance does not establish continuous historical stock or availability.
+      - No inventory batch, return-to-sales link or effective transaction sequence is inferred.
+  data_tests:
+  - unique_grain:
+      arguments:
+        columns:
+        - dataset_name
+        - dataset_row_number
+  - preserves_source_rows:
+      arguments:
+        source_relation: ref('stg_inventory_movements')
+        primary_key: inventory_movement_id
+  columns:
+  - name: inventory_movement_id
+    description: Identifier of the inventory movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - unique
+    - relationships:
+        arguments:
+          to: ref('stg_inventory_movements')
+          field: inventory_movement_id
+  - name: dataset_name
+    description: Name of the dataset containing the transaction.
+    data_type: LowCardinality(String)
+    data_tests:
+    - not_null
+  - name: dataset_row_number
+    description: Original record number within the transaction dataset.
+    data_type: UInt32
+    data_tests:
+    - not_null
+  - name: inventory_document_id
+    description: Identifier of the inventory document.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_inventory_documents')
+          field: inventory_document_id
+  - name: inventory_document_number
+    description: Number assigned to the inventory document.
+    data_type: Nullable(String)
+    data_tests:
+    - not_null
+  - name: product_id
+    description: Identifier of the product.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_products')
+          field: product_id
+  - name: product_code
+    description: Code used by the pharmacy to identify the product.
+    data_type: Nullable(String)
+    data_tests:
+    - not_null
+  - name: warehouse_id
+    description: Identifier of the storage location.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_warehouses')
+          field: warehouse_id
+  - name: warehouse_name
+    description: Name of the storage location where the movement was recorded.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - not_null
+  - name: movement_at
+    description: Date and time the stock movement was recorded.
+    data_type: DateTime64(6)
+    data_tests:
+    - not_null
+  - name: movement_date
+    description: Calendar date on which the inventory movement was recorded.
+    data_type: Date32
+    data_tests:
+    - not_null
+  - name: product_name
+    description: Product name recorded with the transaction.
+    data_type: String
+  - name: drug_class_name
+    description: Drug classification recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: category_name
+    description: Product category recorded with the transaction.
+    data_type: LowCardinality(Nullable(String))
+  - name: consignment_status
+    description: Product ownership or consignment classification recorded with the movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: product_status
+    description: Product status recorded with the inventory movement.
+    data_type: LowCardinality(Nullable(String))
+  - name: transaction_type
+    description: Type of inventory transaction.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - SALE
+          - TRANSFER
+          - PURCHASE
+          - UNKNOWN
+          - IMPORT_STOCKTAKE
+          - IMPORT_PRODUCT
+          - RETURN
+          - CREATE_PRODUCT
+  - name: transaction_description
+    description: Original description of the inventory transaction.
+    data_type: Nullable(String)
+  - name: supplier_name
+    description: Supplier named in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: referenced_sales_invoice_number
+    description: Invoice number mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: patient_code
+    description: Patient code mentioned in the inventory transaction description.
+    data_type: Nullable(String)
+  - name: opening_stock_quantity
+    description: Stock quantity recorded before the movement.
+    data_type: Decimal(18, 6)
+    data_tests:
+    - not_null
+  - name: received_quantity
+    description: Quantity received in the movement.
+    data_type: Decimal(18, 6)
+    data_tests:
+    - not_null
+  - name: issued_quantity
+    description: Quantity issued in the movement.
+    data_type: Decimal(18, 6)
+    data_tests:
+    - not_null
+  - name: closing_stock_quantity
+    description: Stock quantity recorded after the movement.
+    data_type: Decimal(18, 6)
+    data_tests:
+    - not_null
+  - name: opening_stock_unit_id
+    description: Unit used for the stock quantity before the movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_units')
+          field: unit_id
+  - name: opening_stock_unit_code
+    description: Unit used for the stock quantity before the movement.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - not_null
+  - name: received_unit_id
+    description: Unit used for the received quantity.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_units')
+          field: unit_id
+  - name: received_unit_code
+    description: Unit used for the quantity received.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - not_null
+  - name: issued_unit_id
+    description: Unit used for the issued quantity.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_units')
+          field: unit_id
+  - name: issued_unit_code
+    description: Unit used for the quantity issued.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - not_null
+  - name: closing_stock_unit_id
+    description: Unit used for the stock quantity after the movement.
+    data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_units')
+          field: unit_id
+  - name: closing_stock_unit_code
+    description: Unit used for the stock quantity after the movement.
+    data_type: LowCardinality(Nullable(String))
+    data_tests:
+    - not_null
+  - name: recorded_delta_qty
+    description: Recorded quantity received less recorded quantity issued, in the movement unit.
+    data_type: Decimal(18, 6)
+    data_tests:
+    - not_null
+  - name: has_negative_opening_stock
+    description: Whether the recorded opening stock quantity is below zero.
+    data_type: UInt8
+    data_tests:
+    - not_null
+  - name: has_negative_closing_stock
+    description: Whether the recorded closing stock quantity is below zero.
+    data_type: UInt8
+    data_tests:
+    - not_null
+  - name: is_unknown_movement
+    description: Whether the recorded inventory transaction classification is UNKNOWN.
+    data_type: UInt8
+    data_tests:
+    - not_null

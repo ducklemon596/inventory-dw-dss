@@ -1,70 +1,73 @@
 # Inventory DW & DSS
 
-Pharmaceutical sales and inventory data for analysis and decision support.
+A pharmaceutical sales and inventory warehouse for analysis and future decision support. PostgreSQL is the operational source of record.
 
-`PostgreSQL OLTP → Python extraction → ClickHouse raw → dbt staging → Data Marts → DSS`
+## Architecture
 
-Extraction and 12 staging views are implemented. Dimensional models, marts and DSS
-are not implemented yet. PostgreSQL is the operational data source.
+```mermaid
+flowchart LR
+    PG[(PostgreSQL OLTP)] --> EX[Python extraction] --> RAW[(ClickHouse raw)]
+    RAW --> ST[dbt staging] --> INT[dbt intermediate] --> MART[Inventory marts]
+    MART -. future .-> DSS[DSS]
+    CSV[Optional OLTP bootstrap] -. initialization only .-> PG
+```
 
-## Run the pipeline
+Extraction reads OLTP; CSV files are used only by the optional OLTP bootstrap and source lineage validation. Python and dbt run locally through `uv`. Docker Compose runs PostgreSQL and ClickHouse.
 
-Requires Python 3.12+, uv and Docker Compose. Run from the repository root:
+## Repository
+
+| Path | Responsibility |
+|---|---|
+| `src/inventory_dw_dss/` | CLI, extraction, optional OLTP bootstrap, read-only validators |
+| `transform/dbt/` | Staging, sales/inventory intermediate models, inventory marts, seeds, tests |
+| `sql/oltp/` | Transactional schema and bootstrap loading SQL |
+| `infra/` | PostgreSQL and ClickHouse services |
+| `data/` | Source files, bootstrap outputs, governed references |
+| `tests/` | Unit and disposable-database regression tests |
+| `docs/` | Architecture, operations, model rules and source references |
+
+## Prerequisites and quick start
+
+Requires Python 3.12+, `uv` and Docker Compose. Run commands from the repository root:
 
 ```bash
 uv sync --locked
 docker compose -p inventory-dw-dss -f infra/docker-compose.yml up -d --wait
 uv run --locked inventory-dw-dss extract --batch-size 20000
-DBT_PROFILES_DIR=. uv run --locked --directory transform/dbt dbt build --select staging
+uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/dbt \
+  --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
 ```
 
-Extraction reads sales since `max(raw.sales_line.sold_at)` and movements since
-`max(raw.inventory_movement.occurred_at)`, including records equal to each watermark.
-It merges by primary key and refreshes the other 10 tables completely. An absent or
-empty transaction table is loaded in full. No source CSVs are read by this workflow.
+Run extraction before dbt, sequentially. Extraction uses inclusive per-table event-time watermarks for sales lines and inventory movements, and fully refreshes ten reference/header tables. It cannot automatically synchronize historical edits, late arrivals older than the watermark, or deletions. Details and recovery steps are in [extraction operations](docs/extraction.md).
 
-Run extraction and dbt sequentially: raw publication is atomic per table, not across
-all tables. Transactions arriving or changing earlier than the watermark, and deleted
-transactions, are not synchronized automatically. See [extraction](docs/extraction.md)
-for connection settings, mappings, limitations and recovery.
+CSV bootstrap is a separate, optional one-time workflow for reconstructing OLTP. See [bootstrap instructions](docs/oltp/ingestion.md); it uses the optional `bootstrap` dependency group. The operational extraction command does not read CSV files.
 
-Both databases keep data in named Docker volumes. Local endpoints are PostgreSQL
-`localhost:5433` and ClickHouse HTTP `localhost:8123`. Preserve the Compose project
-name `inventory-dw-dss` to reuse existing volumes.
+## Current capabilities
 
-## Project layout
+- PostgreSQL-to-ClickHouse raw extraction with reconciliation and per-table publication.
+- Twelve typed and normalized staging views.
+- Recorded sales enrichment, observed daily sales by original unit, and governed UOM conversion.
+- Source-ordered inventory ledgers, continuity segments, gap diagnostics, movement facts and daily observed inventory facts.
+- Source, grain, balance, lineage and UOM quality checks.
 
-```text
-src/inventory_dw_dss/       CLI, extraction and optional OLTP bootstrap
-transform/dbt/              sources, staging views and data quality tests
-infra/                     PostgreSQL and ClickHouse Compose services
-sql/oltp/                  OLTP schema and bootstrap load SQL
-tests/extraction/          incremental and failure-recovery tests
-tests/oltp_ingestion/      optional bootstrap tests and fixtures
-docs/                      architecture, extraction and OLTP reference
-```
-
-CSV bootstrap is optional and only needed to reconstruct OLTP. Its dependencies
-are isolated in the `bootstrap` group. Follow [bootstrap instructions](docs/oltp/ingestion.md);
-skip bootstrap when PostgreSQL already contains the operational data.
-
-## Validate
+## Validation
 
 ```bash
+uv run --locked dbt debug --project-dir transform/dbt --profiles-dir transform/dbt
+uv run --locked dbt parse --project-dir transform/dbt --profiles-dir transform/dbt
+uv run --locked dbt compile --project-dir transform/dbt --profiles-dir transform/dbt
+uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/dbt \
+  --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
 uv run --locked python -m unittest discover -s tests/extraction -v
-# Uses disposable databases on the running servers; includes an actual dbt build.
-uv run --locked python tests/extraction/integration.py
-uv run --locked python tests/staging/integration.py
-
-DBT_PROFILES_DIR=. uv run --locked --directory transform/dbt dbt debug
-DBT_PROFILES_DIR=. uv run --locked --directory transform/dbt dbt parse
-DBT_PROFILES_DIR=. uv run --locked --directory transform/dbt dbt compile --select staging
-DBT_PROFILES_DIR=. uv run --locked --directory transform/dbt dbt build --select staging
+uv run --locked python -m unittest discover -s tests/validation -v
+uv run --locked python -m unittest discover -s tests/uom -v
+uv run --locked --group bootstrap python -m unittest discover -s tests/oltp_ingestion -v
 ```
 
-The active extraction report is `reports/raw_extraction.json`. dbt writes its test
-results to `transform/dbt/target/run_results.json`. Integration tests clean up their
-own databases and leave the containers running.
+Disposable database integration checks and read-only data validators are described in [tests](tests/README.md). Generated reports and dbt artifacts are local outputs.
 
-[Architecture](docs/architecture.md) · [OLTP schema](docs/oltp/schema.md) ·
-[Data dictionary](docs/oltp/data-dictionary.md) · [Staging rules](docs/staging.md)
+## Important interpretation limits
+
+Inventory models preserve recorded observations; they do not certify physical or available stock. Source order uses the verified export's `dataset_row_number` within dataset, product and warehouse. Gaps remain visible; each starts a separately anchored segment. Missing dates are not filled or carried forward, and conflicting latest-time observations are flagged. Sales quantities stay in their original units unless an explicitly approved, version-pinned UOM factor applies. Sales are not classified as net of returns. The data does not establish historical transaction arrival/correction times, warehouse assignment for sales, or point-in-time availability.
+
+See [architecture](docs/architecture.md), [intermediate rules](docs/intermediate.md), [historical inventory](docs/historical-inventory.md), [UOM governance](docs/uom.md), [source-sequence evidence](docs/source-sequence-integrity.md), and [OLTP schema](docs/oltp/schema.md).

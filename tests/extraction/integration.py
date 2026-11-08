@@ -208,10 +208,17 @@ def main():
                 env = {**os.environ, 'DBT_PROFILES_DIR': str(ROOT / 'transform/dbt'),
                        'DBT_TARGET_PATH': f'{temp}/dbt-target', 'DBT_LOG_PATH': f'{temp}/dbt-logs'}
                 subprocess.run(['uv', 'run', '--locked', '--directory', str(ROOT / 'transform/dbt'),
-                                'dbt', 'build', '--select', 'staging'], env=env, check=True)
+                                'dbt', 'build', '--select', 'path:models/staging',
+                                '--exclude', 'path:tests/intermediate', 'path:tests/marts',
+                                '--indirect-selection', 'cautious'], env=env, check=True)
                 results = json.loads(Path(temp, 'dbt-target/run_results.json').read_text())['results']
                 manifest = json.loads(Path(temp, 'dbt-target/manifest.json').read_text())
-                expected = {key for key, node in manifest['nodes'].items() if node['resource_type'] in ('model', 'test')}
+                # This command validates staging only, even as downstream layers grow.
+                expected = {
+                    key for key, node in manifest['nodes'].items()
+                    if node['resource_type'] in ('model', 'test')
+                    and node['original_file_path'].startswith(('models/staging/', 'tests/staging/'))
+                }
                 assert {r['unique_id'] for r in results} == expected
                 assert all(r['status'] in ('pass', 'success') for r in results)
         print('PASS: initial load, rerun, independent watermarks, boundary updates, refresh, empty delta, failure recovery and dbt.')

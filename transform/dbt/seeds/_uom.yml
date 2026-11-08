@@ -1,0 +1,51 @@
+version: 2
+seeds:
+- name: uom_conversion_mapping
+  description: Published product and unit conversion decisions with approval and supporting evidence.
+  data_tests:
+  - unique_grain:
+      arguments:
+        columns:
+        - mapping_version
+        - product_id
+        - sales_unit
+  columns:
+  - name: product_id
+    description: Original POS product code identifying the medicine.
+    data_type: String
+  - name: sales_unit
+    description: Recorded sales unit to which the conversion decision applies.
+    data_type: String
+  - name: stock_unit
+    description: Recorded stock unit targeted by the conversion decision.
+    data_type: String
+  - name: tier
+    description: Evidence tier assigned to the conversion pair.
+    data_type: LowCardinality(String)
+  - name: approval_status
+    description: Whether conversion is approved, a candidate or quarantined.
+    data_type: LowCardinality(String)
+  - name: factor_approved
+    description: Approved number of stock units per recorded sales unit.
+    data_type: Nullable(Decimal(18, 6))
+  - name: factor_candidate
+    description: Proposed number of stock units per sales unit awaiting approval.
+    data_type: Nullable(Decimal(18, 6))
+  - name: n_supporting_invoices
+    description: Number of invoices supporting the conversion evidence.
+    data_type: UInt32
+  - name: share_at_mode
+    description: Share of supporting observations at the most frequent ratio.
+    data_type: Decimal(38, 18)
+  - name: price_ratio
+    description: Observed ratio between sales and stock-unit prices.
+    data_type: Nullable(Decimal(38, 18))
+  - name: price_check_within_15pct
+    description: Whether the observed price ratio falls within fifteen percent of the proposed quantity ratio.
+    data_type: Bool
+  - name: evidence_source
+    description: Description of the observations supporting the conversion decision.
+    data_type: String
+  - name: mapping_version
+    description: Published version of the conversion decisions.
+    data_type: LowCardinality(String)
