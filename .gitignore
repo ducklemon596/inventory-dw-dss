@@ -11,6 +11,8 @@ dist/
 htmlcov/
 
 # Generated data, receipts and local state
+data/raw/sales_raw.csv
+data/raw/stock_raw.csv
 data/processed/
 reports/
 transform/dbt/target/

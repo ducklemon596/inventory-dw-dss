@@ -12,6 +12,18 @@ Read [architecture](docs/architecture.md), [source/data model](docs/data-model.m
 | Load ClickHouse raw from PostgreSQL | [Raw loader](src/inventory_dw_dss/README.md) | Incremental by default, explicit full or inclusive date range |
 | Build marts and run tests | [dbt transformations](transform/dbt/README.md) | All models, selected layer/model, or tests only |
 
+## Source CSV files (optional PostgreSQL initialization)
+
+The original CSV exports are excluded from Git because each exceeds GitHub's 100 MB file limit. Download the [source ZIP archive (Mendeley Data, version 2)](https://data.mendeley.com/public-api/zip/w6zjtdjk9m/download/2). Extract only the two sales and stock data files; the other archive contents are not needed. Place the two files in the repository with these exact names:
+
+```text
+data/raw/
+├── sales_raw.csv
+└── stock_raw.csv
+```
+
+Rename the downloaded files if necessary; preserve their contents, headers and `RowNumber` values. Both files are required for the [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md). Once PostgreSQL is populated, routine extraction and dbt transformations do not require these CSVs. Governed UOM reference files remain included in Git.
+
 ## Start local services
 
 Requires Python 3.12+, `uv`, Docker and Compose. From the repository root:
