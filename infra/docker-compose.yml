@@ -40,6 +40,13 @@ services:
       timeout: 5s
       retries: 30
 
+  ch-ui:
+    image: ghcr.io/caioricciuti/ch-ui:latest
+    ports:
+      - "127.0.0.1:3488:3488"
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+
 volumes:
   pgdata:
   clickhouse_data:
