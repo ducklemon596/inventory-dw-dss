@@ -99,3 +99,9 @@ Use uppercase SQL keywords, four-space SQL indentation and one clearly named CTE
 YAML uses two-space indentation with indented sequences. Keep `name`, `description`, `data_type` and existing test/config declarations adjacent in field contracts. Descriptions state business meaning, measurement unit and calculation/interpretation where needed. Source YAML describes extracted fields; model YAML describes the actual selected output. Unit fixtures remain beside the models they exercise.
 
 The domain README is the maintenance entry point: purpose, grain, parents, transformations, output groups, consumers and change impact. YAML is the detailed field reference. When inspecting an unfamiliar model, read its domain README, SQL CTEs and YAML in that order, then use the compiled graph to check consumers. Full source/types/tests/contracts must remain synchronized when implementing a reviewed business change.
+
+## Special dimension members
+
+`dim_unit` reserves UInt32 key `0` (`NOT_VERIFIED_STOCK_UNIT`) for unverified stock-unit evidence. Only the sales fact maps a missing `verified_stock_unit_id` to it. Raw, Staging and Intermediate retain NULL; quantities, conversion eligibility and approved factors are unchanged. All other dimension roles use real source keys. See the [dimension guide](models/marts/dimensions/README.md#dim_unit) for exclusion rules and the [sales fact](models/marts/sales/README.md) for its projection contract.
+
+When editing these models, keep the reserved-key collision/special-row test, exact source-preservation projection, FK tests and JOIN-cardinality tests together. Adding another special member requires its own justified business meaning and reserved-key checks; never use zero to fill a quantity or establish a conversion.

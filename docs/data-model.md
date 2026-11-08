@@ -27,7 +27,7 @@ The Marts layer exposes four dimensions and three facts. Product, warehouse and 
 |---|---|---|
 | `dim_product` | One current catalog product / `product_id` | All three facts |
 | `dim_warehouse` | One warehouse / `warehouse_id` | Inventory facts only |
-| `dim_unit` | One source unit label / `unit_id` | Sales original/verified unit and inventory quantity roles |
+| `dim_unit` | One unit label or special evidence member / `unit_id` | Sales original/verified unit and inventory quantity roles |
 | `dim_date` | One calendar day / `calendar_date` | Sales date and inventory event/observation dates |
 | `fct_sales_line` | One source sales line / `sales_invoice_line_id`; lineage key `(dataset_name, dataset_row_number)` | Product × original unit × sold date; no warehouse FK |
 | `fct_inventory_movement` | One source movement / `inventory_movement_id` | Product × warehouse × movement date and recorded quantity units |
@@ -48,6 +48,6 @@ erDiagram
     dim_date ||--o{ fct_inventory_daily_observed : observation_date
 ```
 
-`dim_product` uses current Type 1 catalog attributes; it does not recreate past catalog states. `fct_sales_line` preserves all 57 columns from the governed sales conversion model, including original values and mapping provenance. Candidate, quarantined and unmapped converted quantities remain NULL. Inventory facts preserve the source rows, their recorded order, segment anchors and observation quality flags. Missing observation dates are not generated.
+`dim_product` uses current Type 1 catalog attributes; it does not recreate past catalog states. `fct_sales_line` retains all 57 columns from the governed sales conversion model, including original values and mapping provenance. Its only representation change maps missing stock-unit evidence to `dim_unit` key `0` (`NOT_VERIFIED_STOCK_UNIT`); the upstream evidence remains NULL and this member is not a physical unit or conversion approval. Candidate, quarantined and unmapped converted quantities remain NULL. Inventory facts preserve the source rows, their recorded order, segment anchors and observation quality flags. Missing observation dates are not generated.
 
 Facts do not relate sales to inventory by individual movement. Compare separately aggregated product/date/unit scopes only when units are compatible; warehouse-level demand cannot be attributed from this source. The [business semantics](data-semantics.md) page explains measure interpretation and aggregation limits.

@@ -13,7 +13,7 @@ having row_count > 1
 {# ========================================================================= #}
 {# LINEAGE: bidirectional source-key coverage and exact column preservation.  #}
 {# ========================================================================= #}
-{% test preserves_source_rows(model, source_relation, primary_key) %}
+{% test preserves_source_rows(model, source_relation, primary_key, column_overrides={}, excluded_primary_keys=[]) %}
 {% set source_columns = adapter.get_columns_in_relation(source_relation) if execute else [] %}
 {# A fresh DW has no materialized parents yet. Use their declared schema so that #}
 {# compile still validates the full projection before the first dbt build.       #}
@@ -31,13 +31,20 @@ having row_count > 1
 select
     coalesce(expected.{{ adapter.quote(primary_key) }}, actual.{{ adapter.quote(primary_key) }}) as source_id
 from {{ source_relation }} as expected
-full outer join {{ model }} as actual
+{# Reserved dimension members are validated separately; every real source row still matches exactly. #}
+full outer join (
+    select * from {{ model }}
+    {% if excluded_primary_keys %}
+    where {{ adapter.quote(primary_key) }} not in ({{ excluded_primary_keys | join(', ') }})
+    {% endif %}
+) as actual
     on expected.{{ adapter.quote(primary_key) }} = actual.{{ adapter.quote(primary_key) }}
 where expected.{{ adapter.quote(primary_key) }} is null
     or actual.{{ adapter.quote(primary_key) }} is null
     {% for column in source_columns %}
-    or (isNull(expected.{{ adapter.quote(column.name) }}) != isNull(actual.{{ adapter.quote(column.name) }})
-        or ifNull(expected.{{ adapter.quote(column.name) }} != actual.{{ adapter.quote(column.name) }}, false))
+    {% set expected_value = column_overrides.get(column.name, 'expected.' ~ adapter.quote(column.name)) %}
+    or (isNull({{ expected_value }}) != isNull(actual.{{ adapter.quote(column.name) }})
+        or ifNull({{ expected_value }} != actual.{{ adapter.quote(column.name) }}, false))
     {% endfor %}
 settings join_use_nulls = 1
 {% endtest %}

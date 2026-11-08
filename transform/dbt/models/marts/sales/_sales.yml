@@ -25,6 +25,8 @@ models:
           arguments:
             source_relation: ref('int_sales_quantity_converted')
             primary_key: sales_invoice_line_id
+            column_overrides:
+              verified_stock_unit_id: 'ifNull(expected.verified_stock_unit_id, toUInt32(0))'
       - dimensional_join_cardinality:
           name: fct_sales_line_dimension_join_cardinality
           arguments:
@@ -256,10 +258,11 @@ models:
 
       - name: verified_stock_unit_id
         description: >-
-          Identifier of the stock unit supported by all four quantity-unit roles across the product dataset; absent
-          when evidence disagrees or is unavailable.
-        data_type: Nullable(UInt32)
+          Identifier of the stock unit supported by all four quantity-unit roles across the product dataset; zero
+          represents unverified evidence and does not establish a physical unit or permit conversion.
+        data_type: UInt32
         data_tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_unit')

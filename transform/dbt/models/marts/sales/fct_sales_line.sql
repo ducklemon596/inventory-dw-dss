@@ -52,7 +52,8 @@ SELECT
     document_print_count,
     membership_status,
 
-    verified_stock_unit_id,
+    -- Preserve missing evidence upstream; only its dimensional representation changes here.
+    ifNull(verified_stock_unit_id, toUInt32(0)) AS verified_stock_unit_id,
     verified_stock_unit_code,
     mapping_tier,
     mapping_approval_status,

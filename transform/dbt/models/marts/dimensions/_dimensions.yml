@@ -108,7 +108,7 @@ models:
           - unique
 
   - name: dim_unit
-    description: Units used for recorded sales and stock quantities.
+    description: Units used for recorded sales and stock quantities, plus a placeholder for unverified stock-unit evidence.
 
     config:
       meta:
@@ -121,17 +121,18 @@ models:
           arguments:
             source_relation: ref('stg_units')
             primary_key: unit_id
+            excluded_primary_keys: [0]
 
     columns:
       - name: unit_id
-        description: Identifier of the unit of measure.
+        description: Identifier of the unit of measure; zero represents unverified stock-unit evidence.
         data_type: UInt32
         data_tests:
           - not_null
           - unique
 
       - name: unit_code
-        description: Unit label used by the pharmacy.
+        description: Unit label used by the pharmacy, or NOT_VERIFIED_STOCK_UNIT for unverified stock-unit evidence.
         data_type: LowCardinality(String)
         data_tests:
           - not_null

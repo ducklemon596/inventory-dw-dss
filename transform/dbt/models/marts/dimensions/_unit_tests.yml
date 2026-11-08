@@ -96,3 +96,21 @@ unit_tests:
         rows: []
     expect:
       rows: []
+
+  - name: unit_dimension_preserves_real_units_and_adds_unverified_evidence_member
+    model: dim_unit
+    given:
+      - input: ref('stg_units')
+        rows:
+          - unit_id: 7
+            unit_code: Tab
+          - unit_id: 12
+            unit_code: Box
+    expect:
+      rows:
+        - unit_id: 7
+          unit_code: Tab
+        - unit_id: 12
+          unit_code: Box
+        - unit_id: 0
+          unit_code: NOT_VERIFIED_STOCK_UNIT

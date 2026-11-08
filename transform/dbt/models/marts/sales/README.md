@@ -2,7 +2,9 @@
 
 [fct_sales_line.sql](fct_sales_line.sql) publishes one row per `sales_invoice_line_id`, with alternate lineage key `(dataset_name, dataset_row_number)`. Its only input is `int_sales_quantity_converted`. The full output contract is in [_sales.yml](_sales.yml).
 
-The model explicitly projects all 57 input columns in the same order and types. It adds no calculation or dimension join. Original quantities, recorded monetary fields, optional batch/shift descriptions, conversion status, selected version, applied factor and evidence remain together on each line. Identity/approved quantities are retained; unresolved conversion remains NULL.
+The model explicitly projects all 57 input columns in the same order. The sole representation change is `verified_stock_unit_id`: upstream NULL becomes UInt32 key `0`, referencing the `dim_unit` row labeled `NOT_VERIFIED_STOCK_UNIT`. All other values and types pass through unchanged; no dimension join is added. Original quantities, recorded monetary fields, optional batch/shift descriptions, conversion status, selected version, applied factor and evidence remain together on each line. Identity/approved quantities are retained; unresolved conversion remains NULL.
+
+Key `0` means stock-unit evidence is unverified, not that the unit is known or a conversion is approved. `verified_stock_unit_code` remains NULL. Exclude this key when selecting verified physical units; use the existing `conversion_status` and non-null `stock_unit_qty` for converted-quantity reporting. Candidate, quarantined and unmapped quantities/factors remain NULL even when they join a dimension row. The optional `product_batch_id` remains a nullable source descriptor because there is no batch dimension.
 
 Consumers join `dim_product` by `product_id`, `dim_unit` by the original or verified unit role, and `dim_date` by `sold_date = calendar_date`. Invoice and cashier remain line descriptors. There is no warehouse FK and no downstream dbt model configured; DSS models can depend on this fact through `ref()`.
 
@@ -14,6 +16,6 @@ Run from the repository root:
 uv run --locked inventory-dw-dss transform --select +fct_sales_line dim_product dim_unit dim_date
 ```
 
-For existing relations, add `--test` and select `fct_sales_line`. Existing tests check all 57 values against the upstream model, exact schema, source grain, dimensional relationships/join cardinality and UOM semantics. The native fixture includes signed quantities, zero amounts and conversion outcomes; [mart regression](../../../../../tests/marts/README.md) checks that contract violations are rejected.
+For existing relations, add `--test` and select `fct_sales_line`. Existing tests check all 57 values against the upstream model, applying only the explicit NULL-to-key-0 expectation for `verified_stock_unit_id`, exact schema, source grain, dimensional relationships/join cardinality and UOM semantics. The native fixture includes signed quantities, zero amounts and conversion outcomes; [mart regression](../../../../../tests/marts/README.md) checks that contract violations are rejected.
 
 Edit a reusable calculation in Intermediate first. If a reviewed requirement changes the fact projection, update its SQL, YAML and source-preservation/schema tests together, then rebuild affected parents and consumers. Source changes to stock-unit evidence or mapping version can also invalidate persisted sales results.

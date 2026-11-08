@@ -50,36 +50,81 @@ def main():
             SELECT * FROM `{source}`.int_sales_quantity_converted
             WHERE sales_invoice_line_id IN (
                 SELECT min(sales_invoice_line_id) FROM `{source}`.fct_sales_line
-                WHERE conversion_status IN ('approved', 'candidate') GROUP BY conversion_status)''')
+                WHERE conversion_status IN ('approved', 'candidate') AND verified_stock_unit_id != 0
+                GROUP BY conversion_status
+                UNION ALL SELECT min(sales_invoice_line_id) FROM `{source}`.fct_sales_line
+                WHERE verified_stock_unit_id = 0)''')
         client.command(f'CREATE TABLE `{database}`.fct_sales_line ENGINE = Memory AS '
-                       f'SELECT * FROM `{database}`.int_sales_quantity_converted')
-        assert client.query(f'SELECT count() FROM `{database}`.fct_sales_line').first_row[0] == 2
+                       f'SELECT * FROM `{source}`.fct_sales_line WHERE sales_invoice_line_id IN '
+                       f'(SELECT sales_invoice_line_id FROM `{database}`.int_sales_quantity_converted)')
+        assert client.query(f'SELECT count() FROM `{database}`.fct_sales_line').first_row[0] == 3
         for name in ('matches_declared_schema', 'dimensional_join_cardinality', 'preserves_source_rows'):
             assert failures(name, 'fct_sales_line') == 0, name
         assert failures('relationships', 'fct_sales_line', 'product_id') == 0
 
         client.command(f'TRUNCATE TABLE `{database}`.dim_product')
-        assert failures('relationships', 'fct_sales_line', 'product_id') == 2
+        assert failures('relationships', 'fct_sales_line', 'product_id') == 3
         assert failures('dimensional_join_cardinality', 'fct_sales_line') == 0
         # An orphan is retained for diagnosis; referential acceptance rejects it.
         client.command(f'INSERT INTO `{database}`.dim_product SELECT * FROM `{source}`.dim_product')
         client.command(f'''INSERT INTO `{database}`.dim_product SELECT * FROM `{source}`.dim_product
             WHERE product_id IN (SELECT product_id FROM `{database}`.fct_sales_line)''')
         assert failures('unique', 'dim_product', 'product_id') > 0
-        assert failures('dimensional_join_cardinality', 'fct_sales_line') == 2
+        assert failures('dimensional_join_cardinality', 'fct_sales_line') == 3
+
+        client.command(f'TRUNCATE TABLE `{database}`.dim_product')
+        client.command(f'INSERT INTO `{database}`.dim_product SELECT * FROM `{source}`.dim_product')
+        assert failures('not_null', 'fct_sales_line', 'verified_stock_unit_id') == 0
+        assert failures('relationships', 'fct_sales_line', 'verified_stock_unit_id') == 0
+
+        # The special member is required exactly once and cannot collide with source units.
+        client.command(f'CREATE TABLE `{database}`.stg_units ENGINE = Memory AS '
+                       f'SELECT * FROM `{source}`.stg_units')
+        for fact in ('fct_inventory_movement', 'fct_inventory_daily_observed'):
+            client.command(f'CREATE TABLE `{database}`.{fact} ENGINE = Memory AS '
+                           f'SELECT * FROM `{source}`.{fact} LIMIT 0')
+        special = next(node['compiled_code'] for node in manifest['nodes'].values()
+                       if node['name'] == 'unit_special_member_contract')
+        special = special.replace(f'`{source}`', f'`{database}`')
+        assert client.query(special).row_count == 0
+        client.command(f"INSERT INTO `{database}`.stg_units VALUES (0, 'Untrusted source unit')")
+        assert client.query(special).row_count == 1
+        client.command(f'TRUNCATE TABLE `{database}`.stg_units')
+        client.command(f'INSERT INTO `{database}`.stg_units SELECT * FROM `{source}`.stg_units')
+        client.command(f'INSERT INTO `{database}`.dim_unit SELECT * FROM `{source}`.dim_unit WHERE unit_id = 0')
+        assert client.query(special).row_count == 1
+        assert failures('dimensional_join_cardinality', 'fct_sales_line') > 0
+        client.command(f'TRUNCATE TABLE `{database}`.dim_unit')
+        client.command(f'INSERT INTO `{database}`.dim_unit SELECT * FROM `{source}`.dim_unit WHERE unit_id != 0')
+        assert client.query(special).row_count == 1
+        assert failures('relationships', 'fct_sales_line', 'verified_stock_unit_id') == 1
+        client.command(f'INSERT INTO `{database}`.dim_unit SELECT * FROM `{source}`.dim_unit WHERE unit_id = 0')
 
         columns = client.query(f'DESCRIBE TABLE `{database}`.fct_sales_line').result_rows
+        null_count = client.query(f'SELECT countIf(stock_unit_qty IS NULL) FROM `{database}`.int_sales_quantity_converted').first_row[0]
         projection = ', '.join(
             'ifNull(stock_unit_qty, toDecimal128(0, 12)) as stock_unit_qty'
-            if column[0] == 'stock_unit_qty' else f'`{column[0]}`' for column in columns)
+            if column[0] == 'stock_unit_qty' else
+            'ifNull(verified_stock_unit_id, toUInt32(0)) as verified_stock_unit_id'
+            if column[0] == 'verified_stock_unit_id' else f'`{column[0]}`' for column in columns)
         client.command(f'TRUNCATE TABLE `{database}`.fct_sales_line')
         client.command(f'INSERT INTO `{database}`.fct_sales_line SELECT {projection} '
                        f'FROM `{database}`.int_sales_quantity_converted')
-        assert failures('preserves_source_rows', 'fct_sales_line') == 1
+        assert failures('preserves_source_rows', 'fct_sales_line') == null_count
+
+        # Neither a real verified unit changed to zero nor missing evidence changed to a real unit is valid.
+        for replacement in ('toUInt32(0)', '(SELECT min(unit_id) FROM `' + database + '`.stg_units)'):
+            projection = ', '.join(f'{replacement} AS verified_stock_unit_id'
+                                   if column[0] == 'verified_stock_unit_id' else f'`{column[0]}`'
+                                   for column in columns)
+            client.command(f'TRUNCATE TABLE `{database}`.fct_sales_line')
+            client.command(f'INSERT INTO `{database}`.fct_sales_line SELECT {projection} '
+                           f'FROM `{database}`.int_sales_quantity_converted')
+            assert failures('preserves_source_rows', 'fct_sales_line') > 0
 
         client.command(f'ALTER TABLE `{database}`.fct_sales_line ADD COLUMN warehouse_id UInt32')
         assert failures('matches_declared_schema', 'fct_sales_line') == 1
-        print('PASS: valid joins/schema/preservation; orphan, fan-out, NULL-to-zero and extra warehouse column rejected')
+        print('PASS: valid joins/schema/exact FK projection; orphan, fan-out, reserved-key collision, missing/duplicate special member, fabricated FK/quantity and extra warehouse field rejected')
     finally:
         client.command(f'DROP DATABASE IF EXISTS `{database}` SYNC')
         client.close()

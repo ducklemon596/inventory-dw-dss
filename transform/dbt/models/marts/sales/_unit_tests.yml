@@ -18,6 +18,7 @@ unit_tests:
             packaging_fee_amount: '0.000000'
             total_amount: '0.000000'
             mapping_version: uom_mapping_v2_2026-11-08
+            verified_stock_unit_id: 1
             conversion_status: identity
             applied_conversion_factor: '1.000000'
             stock_unit_qty: '-1.000001000000'
@@ -33,6 +34,7 @@ unit_tests:
             packaging_fee_amount: '0.000000'
             total_amount: '0.000000'
             mapping_version: uom_mapping_v2_2026-11-08
+            verified_stock_unit_id: 2
             conversion_status: approved
             applied_conversion_factor: '1.000000'
             stock_unit_qty: '0.000000000000'
@@ -48,6 +50,7 @@ unit_tests:
             packaging_fee_amount: '0.000000'
             total_amount: '0.000000'
             mapping_version: uom_mapping_v2_2026-11-08
+            verified_stock_unit_id: 3
             conversion_status: candidate
             applied_conversion_factor: null
             stock_unit_qty: null
@@ -63,6 +66,7 @@ unit_tests:
             packaging_fee_amount: '0.000000'
             total_amount: '0.000000'
             mapping_version: uom_mapping_v2_2026-11-08
+            verified_stock_unit_id: 4
             conversion_status: quarantined
             applied_conversion_factor: null
             stock_unit_qty: null
@@ -78,6 +82,7 @@ unit_tests:
             packaging_fee_amount: '0.000000'
             total_amount: '0.000000'
             mapping_version: uom_mapping_v2_2026-11-08
+            verified_stock_unit_id: null
             conversion_status: unmapped
             applied_conversion_factor: null
             stock_unit_qty: null
@@ -95,6 +100,7 @@ unit_tests:
           packaging_fee_amount: '0.000000'
           total_amount: '0.000000'
           mapping_version: uom_mapping_v2_2026-11-08
+          verified_stock_unit_id: 1
           conversion_status: identity
           applied_conversion_factor: '1.000000'
           stock_unit_qty: '-1.000001000000'
@@ -110,6 +116,7 @@ unit_tests:
           packaging_fee_amount: '0.000000'
           total_amount: '0.000000'
           mapping_version: uom_mapping_v2_2026-11-08
+          verified_stock_unit_id: 2
           conversion_status: approved
           applied_conversion_factor: '1.000000'
           stock_unit_qty: '0.000000000000'
@@ -125,6 +132,7 @@ unit_tests:
           packaging_fee_amount: '0.000000'
           total_amount: '0.000000'
           mapping_version: uom_mapping_v2_2026-11-08
+          verified_stock_unit_id: 3
           conversion_status: candidate
           applied_conversion_factor: null
           stock_unit_qty: null
@@ -140,6 +148,7 @@ unit_tests:
           packaging_fee_amount: '0.000000'
           total_amount: '0.000000'
           mapping_version: uom_mapping_v2_2026-11-08
+          verified_stock_unit_id: 4
           conversion_status: quarantined
           applied_conversion_factor: null
           stock_unit_qty: null
@@ -155,6 +164,7 @@ unit_tests:
           packaging_fee_amount: '0.000000'
           total_amount: '0.000000'
           mapping_version: uom_mapping_v2_2026-11-08
+          verified_stock_unit_id: 0
           conversion_status: unmapped
           applied_conversion_factor: null
           stock_unit_qty: null

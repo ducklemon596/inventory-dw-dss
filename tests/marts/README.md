@@ -2,7 +2,7 @@
 
 Entry points: `integration.py`.
 
-The integration script copies the required Dimensions and two sales fixture rows into a disposable database, runs compiled dbt checks, then injects missing parents, duplicate Dimension fan-out, unresolved NULL-to-zero replacement and an extra warehouse field.
+The integration script copies the required Dimensions and three sales fixture rows (approved, candidate and unverified stock-unit evidence) into a disposable database, runs compiled dbt checks, then injects missing parents, duplicate Dimension fan-out, source-key collisions, missing/duplicate special members, invalid stock-unit FK substitutions, unresolved quantity NULL-to-zero replacement and an extra warehouse field. Exact source preservation permits only the declared stock-unit FK representation change.
 
 ```bash
 uv run --locked python tests/marts/integration.py
