@@ -15,4 +15,4 @@ approval evidence or mapping vintage, so it cannot authorize or execute conversi
 
 Keep these original references intact. The supplied v1/v2 pair-level mappings form the governed
 397-row dbt seed; the older coverage-only CSV remains evidence and is never used as factors. Tier B/C
-remain unapproved. See [UOM governance](../../docs/uom.md) for version selection and coverage.
+remain unapproved. See [UOM governance](../../transform/dbt/seeds/README.md) for version selection and coverage.

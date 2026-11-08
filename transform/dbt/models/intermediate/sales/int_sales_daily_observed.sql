@@ -7,7 +7,7 @@ with recorded_sales as (
     from {{ ref('int_sales_lines_enriched') }}
 )
 
--- 02. Aggregate only observed combinations; absent dates remain absent.
+-- Aggregate only observed combinations; absent dates remain absent.
 select
     product_id,
     sold_date,

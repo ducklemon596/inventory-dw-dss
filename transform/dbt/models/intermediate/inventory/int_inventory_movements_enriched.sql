@@ -18,7 +18,7 @@ units as (
     select * from {{ ref('stg_units') }}
 )
 
--- 02. Preserve source observations and expose their recorded quantity effect.
+-- Preserve source observations and expose their recorded quantity effect.
 select
     -- Source identifiers and business codes.
     movements.inventory_movement_id as inventory_movement_id,

@@ -10,11 +10,8 @@ Raw data is preserved unchanged. Codes and RowNumber must remain stable for idem
 uv run --group bootstrap inventory-dw-dss bootstrap prepare --interval 1mo
 ```
 
-The loader supports `1d`, `3d`, `1w` and `1mo`, dataset selection and inclusive date ranges. See [ingestion instructions](../docs/oltp/ingestion.md) and [source data dictionary](../docs/oltp/data-dictionary.md).
+The loader supports `1d`, `3d`, `1w` and `1mo`, dataset selection and inclusive date ranges. See [ingestion instructions](../src/inventory_dw_dss/oltp_ingestion/README.md) and [source data dictionary](../docs/source-system.md).
 
 CSV files are upstream ingestion inputs, not operational DW sources. Once OLTP is populated, DW extraction reads PostgreSQL without a runtime dependency on this directory. Generated load receipts live in `reports/oltp_ingestion/`, outside the datasets.
 
-`reference/` contains the export passport and supplied UOM coverage evidence. These files
-are retained for reproducibility; they are not raw extraction inputs or approved conversion
-factors. See [reference provenance](reference/README.md). Historical validators read the
-original/prepared files as evidence only and never regenerate them.
+`reference/` contains the export passport, immutable pair-level UOM decisions and earlier coverage-only evidence. These serve different roles: the pair-level approved decisions form the governed dbt seed; the coverage-only summary cannot authorize a conversion. None is an extraction input. See [reference provenance](reference/README.md). Validators read original/prepared files as evidence and do not regenerate them.

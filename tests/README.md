@@ -1,32 +1,58 @@
-# Tests
+# Testing and acceptance
 
-| Folder | Scope |
-|---|---|
-| `extraction/` | Publication unit tests and disposable PostgreSQL/ClickHouse incremental regression |
-| `marts/` | Compiled dimension/FK/cardinality/schema safeguards in a disposable ClickHouse DB |
-| `staging/` | Compiled dbt normalization macros checked with read-only ClickHouse queries |
-| `uom/` | Published-reference immutability and compiled-SQL safeguards in a disposable ClickHouse DB |
-| `validation/` | Passport serialization, ordering and reconciliation failure cases without databases |
-| `oltp_ingestion/` | Optional bootstrap parser/unit tests and disposable bootstrap integration |
+Run from the repository root with the [services](../infra/README.md) running. Build dbt before tests that inspect its compiled SQL. Pin the same UOM version in builds/tests/analyses. Compilation proves SQL rendering, not correct data.
+
+## What each layer protects
+
+| Test group | Protects / why it matters | On failure |
+|---|---|---|
+| [Source and Staging](../transform/dbt/tests/staging/README.md) | Parse strictness, source row counts, source keys, batch/product association | Trace the failing PK into raw; distinguish missing source values from invalid format |
+| [Intermediate](../transform/dbt/tests/intermediate/README.md) | Grain, row preservation, recorded balance, predecessor/segment correctness | Inspect the exact ledger/product scope; do not repair balances or change ordering to hide a gap |
+| [UOM](../transform/dbt/tests/uom/README.md) | Version/approval, exact arithmetic, compatible stock evidence and coverage | Check immutable reference, version literal and unit evidence; never promote a candidate |
+| [Marts](../transform/dbt/tests/marts/README.md) | Fact/Dimension grains, exact schemas, FK validity, JOIN cardinality, observation/measure reconciliation | Inspect duplicate/missing parent keys, projection drift or NULL replacement |
+| [Generic tests](../transform/dbt/tests/generic/README.md) | Reusable uniqueness, complete source preservation and schema/JOIN checks | Read returned failing keys; each generic test is configured in model YAML |
+| [Python publication](extraction/README.md) | Extractor failure/lock/retry boundary in disposable databases | Inspect its temporary test logs and recovery scope, not production data |
+| [Python reference](uom/README.md) | Immutable byte checksums and exact seed union; compiled UOM failure fixtures | Restore altered references or fix version publication, not expected checksum values |
+| [Read-only validators](../src/inventory_dw_dss/validation/README.md) | Six-layer export lineage and snapshot inventory reconciliation | Check export vintage, prepared manifest and source identity association |
+| [Python mart regression](marts/README.md) | Proves compiled tests reject orphan/fan-out/NULL/schema faults | Ensure the pinned full build produced compiled contracts first |
+| [Optional bootstrap](oltp_ingestion/README.md) | CSV parsers, deterministic partitions and transactional upsert/rollback | Reproduce only in the disposable database; do not reload operational OLTP |
+
+Not-null, uniqueness, relationships, source-preservation and JOIN-cardinality checks are distinct. A LEFT JOIN can preserve an orphan while an FK test rejects it; a duplicate parent can multiply rows while an orphan check passes. Full acceptance needs all of them.
+
+## dbt commands
+
+```bash
+# Complete acceptance: models, seed, data tests and native unit fixtures.
+uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+# Build sales ancestors and required Dimensions.
+uv run --locked dbt build --select +fct_sales_line dim_product dim_unit dim_date --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+# Test existing selected outputs without rebuilding them.
+uv run --locked dbt test --select fct_sales_line --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+```
+
+`dbt build` can gate downstream nodes on tests; already published tables are not rolled back by a later failure. Run the full build for acceptance after targeted development. Read `transform/dbt/target/run_results.json` for status/failing nodes, `target/compiled/inventory_dw/` for rendered SQL and `logs/dbt.log` for executed queries/errors. A singular test returns failing rows; a zero-row result passes. Do not change source counts or remove tests to make an unexpected export pass.
+
+## Python suite
 
 ```bash
 uv run --locked python -m unittest discover -s tests/extraction -v
 uv run --locked python -m unittest discover -s tests/validation -v
 uv run --locked python -m unittest discover -s tests/uom -v
-uv run --locked python tests/marts/integration.py
-uv run --locked python tests/uom/integration.py
-uv run --locked python tests/extraction/integration.py
-uv run --locked python tests/staging/integration.py
 uv run --locked --group bootstrap python -m unittest discover -s tests/oltp_ingestion -v
+uv run --locked python tests/staging/integration.py
+uv run --locked python tests/uom/integration.py
+uv run --locked python tests/marts/integration.py
+uv run --locked python tests/extraction/integration.py
+uv run --locked --group bootstrap python tests/oltp_ingestion/integration.py
 ```
 
-Integration tests require the running Compose servers. Mart regression reads compiled test SQL
-from the pinned full dbt build and checks missing parents, duplicate dimensions, altered NULLs
-and unexpected sales columns in its disposable database. Extraction integration creates and
-removes uniquely named test databases, including its own raw/DW schema; it never uses live
-OLTP tables for mutations. Its dbt selection intentionally excludes historical-only tests.
-Bootstrap integration is optional and documented with the bootstrap workflow.
+Unit tests require no running databases. Staging integration compiles a temporary fixture from the real macros, then evaluates its cases with SELECTs; dbt connection probes may create/drop temporary probe tables. Other integration scripts create uniquely named disposable databases, inject their own fixtures and clean them up. Extraction integration runs its own staging dbt selection in a temporary project; it does not extract into production raw. Bootstrap integration starts existing services if needed but loads only its disposable database. Do not run production `bootstrap load` or `extract` as a substitute for these tests.
 
-SQL reconciliation and native dbt unit tests belong next to their analytical models or in
-`transform/dbt/tests/`; run them with `dbt build` as shown in the main README. Do not add
-Python copies of SQL business calculations to test them. Generated reports are ignored.
+## Export reconciliation
+
+```bash
+uv run --locked python scripts/validation/validate_source_sequence.py --output reports/source_sequence.json
+uv run --locked python scripts/validation/validate_inventory_history.py --output reports/historical_inventory.json
+```
+
+Run validators after dbt and while extraction/build are idle. Source validation requires original CSVs and existing monthly prepared partitions. They use SELECT only, then write local reports. Their passport expectations apply to the verified export, not arbitrary future datasets. Snapshot counts are reconciliation baselines, not permanent hardcoded model tests. Keep reference files and useful validation evidence; generated `reports/` and dbt artifacts remain ignored.

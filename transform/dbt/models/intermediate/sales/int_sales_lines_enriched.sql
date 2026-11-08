@@ -21,7 +21,7 @@ batches as (
     select * from {{ ref('stg_product_batches') }}
 )
 
--- 02. Preserve transaction observations; add codes and batch attributes.
+-- Preserve transaction observations; add codes and batch attributes.
 select
     -- Source identifiers and business codes.
     sales_lines.sales_invoice_line_id as sales_invoice_line_id,

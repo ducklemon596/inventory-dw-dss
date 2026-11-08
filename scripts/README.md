@@ -16,5 +16,5 @@ Default reference: `data/reference/sequence_passport_v2.json`. Database settings
 Run validation while extraction and dbt are idle so relations do not change during reads.
 
 Add reusable logic to the package and keep wrappers here short. See
-[source evidence](../docs/source-sequence-integrity.md) and
-[historical inventory](../docs/historical-inventory.md) for interpretation and limitations.
+[source evidence](../docs/source-system.md) and
+[historical inventory](../docs/data-semantics.md) for interpretation and limitations.
