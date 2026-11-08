@@ -1,0 +1,104 @@
+version: 2
+unit_tests:
+- name: product_dimension_preserves_missing_catalog_attributes_and_unmatched_products
+  model: dim_product
+  given:
+  - input: ref('stg_products')
+    rows:
+    - product_id: 1
+      product_code: SKU_1
+      product_name: Known
+      manufacturer_id: 1
+      drug_class_id: 1
+      category_id: 1
+    - product_id: 2
+      product_code: SKU_2
+      product_name: null
+      manufacturer_id: null
+      drug_class_id: null
+      category_id: null
+    - product_id: 3
+      product_code: SKU_3
+      product_name: Unmatched
+      manufacturer_id: 999
+      drug_class_id: null
+      category_id: null
+  - input: ref('stg_manufacturers')
+    rows:
+    - manufacturer_id: 1
+      manufacturer_name: Maker
+  - input: ref('stg_drug_classes')
+    rows:
+    - drug_class_id: 1
+      drug_class_name: Class
+  - input: ref('stg_categories')
+    rows:
+    - category_id: 1
+      category_name: Category
+  expect:
+    rows:
+    - product_id: 1
+      product_code: SKU_1
+      product_name: Known
+      manufacturer_id: 1
+      manufacturer_name: Maker
+      drug_class_id: 1
+      drug_class_name: Class
+      category_id: 1
+      category_name: Category
+    - product_id: 2
+      product_code: SKU_2
+      product_name: null
+      manufacturer_id: null
+      manufacturer_name: null
+      drug_class_id: null
+      drug_class_name: null
+      category_id: null
+      category_name: null
+    - product_id: 3
+      product_code: SKU_3
+      product_name: Unmatched
+      manufacturer_id: 999
+      manufacturer_name: null
+      drug_class_id: null
+      drug_class_name: null
+      category_id: null
+      category_name: null
+- name: date_dimension_covers_complete_years_leap_day_and_iso_boundaries
+  model: dim_date
+  given:
+  - input: ref('stg_sales_invoice_lines')
+    rows:
+    - sold_at: '2024-02-29 23:59:59.123456'
+      shift_date: '2021-08-06'
+      product_batch_id: null
+  - input: ref('stg_inventory_movements')
+    rows:
+    - movement_at: '2025-01-01 00:00:00.000001'
+  expect:
+    format: sql
+    rows: |-
+      select
+          calendar_date,
+          toUInt16(toYear(calendar_date)) as calendar_year,
+          toUInt8(toQuarter(calendar_date)) as calendar_quarter,
+          toUInt8(toMonth(calendar_date)) as calendar_month,
+          toUInt8(toDayOfMonth(calendar_date)) as day_of_month,
+          toUInt8(toDayOfWeek(calendar_date)) as iso_day_of_week,
+          toUInt8(toWeek(calendar_date, 3)) as iso_week,
+          toUInt16(toYear(addDays(calendar_date, 4 - toInt32(toDayOfWeek(calendar_date))))) as iso_year,
+          toDate32(toStartOfMonth(calendar_date)) as month_start_date,
+          toUInt8(toDayOfWeek(calendar_date) in (6, 7)) as is_weekend
+      from (
+          select toDate32(addDays(toDate32('2024-01-01'), number)) as calendar_date
+          from numbers(731)
+      )
+- name: date_dimension_has_no_epoch_member_without_events
+  model: dim_date
+  given:
+  - input: ref('stg_sales_invoice_lines')
+    rows: []
+  - input: ref('stg_inventory_movements')
+    rows: []
+  expect:
+    rows: []

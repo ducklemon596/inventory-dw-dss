@@ -45,7 +45,8 @@ def main():
             env = {**os.environ, 'CLICKHOUSE_DB': database, 'DBT_TARGET_PATH': temp + '/target',
                    'DBT_LOG_PATH': temp + '/logs'}
             subprocess.run(['uv', 'run', '--locked', '--project', str(ROOT), 'dbt', 'compile',
-                            '--select', 'int_sales_quantity_converted', '--project-dir', str(ROOT / 'transform/dbt'),
+                            '--select', 'int_sales_quantity_converted',
+                            '--vars', '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}', '--project-dir', str(ROOT / 'transform/dbt'),
                             '--profiles-dir', str(ROOT / 'transform/dbt')], env=env, check=True)
             query = Path(temp, 'target/compiled/inventory_dw/models/intermediate/sales/int_sales_quantity_converted.sql').read_text()
             assert client.query(f'SELECT count() FROM `{database}`.int_sales_lines_enriched').first_row[0] == 1

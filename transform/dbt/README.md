@@ -7,6 +7,8 @@ The `inventory_dw` project reads ClickHouse `raw` tables populated from PostgreS
 | `models/staging/` | Source-shaped typed views grouped by sales, inventory and reference domains |
 | `models/intermediate/sales/` | Sales enrichment, observed daily sales, stock-unit evidence and governed conversion |
 | `models/intermediate/inventory/` | Movement enrichment, source-ordered ledger, continuity segments and gap diagnostics |
+| `models/marts/dimensions/` | Current product, warehouse, unit and event-date calendar |
+| `models/marts/sales/` | One recorded sales line with all governed conversion fields |
 | `models/marts/inventory/` | Recorded movement and daily observed inventory facts |
 | `seeds/` | Versioned governed UOM decisions |
 | `tests/` | Source preservation, grain, reconciliation and business invariants |
@@ -19,4 +21,4 @@ uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/d
   --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
 ```
 
-Models retain their dbt names when SQL files are organized into domain folders. Inventory ledger, segment and fact tables rebuild on each run; enrichment and diagnostics are views. No incremental historical maintenance is configured. `target/` and `logs/` are generated outputs ignored by Git. Read [UOM governance](../../docs/uom.md) before publishing a new mapping version.
+Models retain their dbt names when SQL files are organized into domain folders. Dimensions, inventory ledger/segment tables and all three facts rebuild on each run; enrichment and diagnostics are views. No incremental historical maintenance is configured. `target/` and `logs/` are generated outputs ignored by Git. Read [UOM governance](../../docs/uom.md) before publishing a new mapping version.

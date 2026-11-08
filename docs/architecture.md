@@ -4,28 +4,37 @@
 flowchart LR
     CSV[Optional CSV bootstrap] -. initialize only .-> PG[(PostgreSQL OLTP)]
     PG --> EX[Python incremental extraction] --> RAW[(ClickHouse raw)]
-    RAW --> ST[dbt staging views] --> INT[Sales and inventory intermediate]
-    INT --> M[Recorded inventory marts] -. future .-> DSS[DSS]
+    RAW --> ST[dbt staging views]
+    ST --> D[Product, warehouse, unit and date dimensions]
+    ST --> INT[Sales and inventory intermediate]
+    INT --> SF[Recorded sales-line fact]
+    INT --> IF[Movement and observed daily inventory facts]
+    SF -. future .-> DSS[DSS]
+    IF -. future .-> DSS
 ```
 
-PostgreSQL is the operational source of record. Extraction and dbt run locally through `uv`; Docker Compose provides PostgreSQL and ClickHouse. The Compose project uses PostgreSQL port 5433 and ClickHouse HTTP port 8123.
+PostgreSQL is the operational source of record. Extraction and dbt run locally through `uv`; Docker Compose provides PostgreSQL and ClickHouse. Local endpoints are PostgreSQL port 5433 and ClickHouse HTTP port 8123.
 
 ## Extraction
 
-The extractor reads all twelve OLTP tables in one repeatable-read, read-only transaction. Sales lines and inventory movements use separate inclusive event-time watermarks. Ten reference and header tables refresh fully. Each table is validated in a temporary ClickHouse database and published individually. Extraction and dbt must run sequentially. Historical corrections, late arrivals before a watermark and source deletions are not synchronized automatically. See [extraction operations](extraction.md).
+The extractor reads twelve OLTP tables in one repeatable-read, read-only transaction. Sales lines and inventory movements use separate inclusive event-time watermarks. Ten reference and header tables refresh fully. Each table is validated in a temporary ClickHouse database and published individually. Run extraction before dbt, sequentially. Historical corrections, late arrivals before a watermark and source deletions are not synchronized automatically. See [extraction operations](extraction.md).
 
-Raw stores PostgreSQL values as text, preserving source NULLs. Staging casts, names and normalizes source fields while preserving each source row's grain. Staging models are grouped by sales, inventory and reference domains.
+Raw stores PostgreSQL values as text and preserves source NULLs. Twelve staging views validate types and normalize fields while preserving each source record. Source files are not runtime extraction dependencies.
 
-## Transformation
+## Dimensions and facts
 
-Sales intermediate models preserve recorded invoice lines, enrich them with available identifiers and aggregate only observed product/date/unit combinations. A separate view applies the selected governed UOM version.
+Four full-refresh dimensions share existing OLTP numeric identities for product, warehouse and unit; the calendar uses `Date32` dates. Product attributes use Type 1 current catalog values, with optional manufacturer/class/category labels preserved as NULL. All three facts share product, unit and date roles. Warehouse relates to inventory facts only.
 
-Inventory movements are ordered by the verified export sequence within dataset/product/warehouse. The models preserve classifications and signed observations, identify discontinuities and start a new segment at each gap. Inventory marts expose recorded movements and observed daily balances/flows. Ledger, segment and mart tables rebuild on dbt runs; supporting enrichment and diagnostics remain views.
+`fct_sales_line` preserves all 57 columns of the governed conversion view, including original quantities, financial fields, line attributes, conversion status and version/evidence. Identity and approved conversions provide stock-unit quantities; unsupported results remain NULL. Invoice, cashier and optional batch identities remain line descriptors.
 
-The observed inventory outputs do not certify physical stock or historical availability. Missing dates are not filled. Carry-forward, point-in-time availability features, conformed dimensions and the DSS application are not implemented.
+Inventory models retain every source movement, order each dataset/product/warehouse ledger by verified export sequence, and anchor continuity segments at recorded openings. Inventory marts expose movement-level quantities and the coherent last source observation on each observed day. Diagnostics preserve gaps, negatives and latest-time conflicts. Calendar rows do not generate inventory observations or sales activity.
 
-## Bootstrap and validation
+Dimensions, ledger, segments and the three facts use fully rebuilt MergeTree tables. Supporting enrichment, governed conversion and diagnostic models remain views. Publication is per relation; downstream readers should use results after a successful complete build. See the [star schema](design/star-schema.md) for grains, keys, measure aggregation and tests.
 
-CSV preprocessing and OLTP initialization are optional bootstrap tasks, separate from the operational extraction pipeline. Validation modules issue read-only queries; scripts provide thin entry points. Source sequence evidence and immutable UOM references are maintained under `data/reference/` and documented in [source-sequence integrity](source-sequence-integrity.md) and [UOM governance](uom.md).
+## Interpretation and validation
 
-[OLTP schema](oltp/schema.md) · [Bootstrap](oltp/ingestion.md) · [Intermediate rules](intermediate.md)
+Recorded sales do not establish net demand or sales warehouse. Observed balances do not certify physical or available stock. Missing dates remain absent; quantities in different product/unit scopes are not pooled. Type 1 catalogs and event timestamps do not establish historical arrival/correction knowledge. Carry-forward, SCD2, availability/PIT feature marts and the DSS application are outside the implemented scope.
+
+CSV preparation and OLTP initialization are optional bootstrap tasks. Read-only validators reconcile source sequence and inventory history; dbt tests additionally check dimensional schema, FK coverage, join cardinality and complete sales/source preservation. Test mutation scenarios use disposable databases. References and immutable UOM snapshots remain under `data/reference/`.
+
+[OLTP schema](oltp/schema.md) · [Bootstrap](oltp/ingestion.md) · [Intermediate rules](intermediate.md) · [Tests](../tests/README.md)

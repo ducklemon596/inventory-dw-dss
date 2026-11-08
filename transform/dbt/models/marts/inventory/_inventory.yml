@@ -31,9 +31,21 @@ models:
   - name: product_id
     description: Identifier of the product.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_product')
+          field: product_id
   - name: warehouse_id
     description: Identifier of the storage location.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_warehouse')
+          field: warehouse_id
   - name: movement_at
     description: Date and time the stock movement was recorded.
     data_type: DateTime64(6)
@@ -70,15 +82,39 @@ models:
   - name: opening_stock_unit_id
     description: Unit used for the stock quantity before the movement.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_unit')
+          field: unit_id
   - name: received_unit_id
     description: Unit used for the received quantity.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_unit')
+          field: unit_id
   - name: issued_unit_id
     description: Unit used for the issued quantity.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_unit')
+          field: unit_id
   - name: closing_stock_unit_id
     description: Unit used for the stock quantity after the movement.
     data_type: UInt32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_unit')
+          field: unit_id
   - name: transaction_type
     description: Type of inventory transaction.
     data_type: LowCardinality(Nullable(String))
@@ -94,6 +130,12 @@ models:
   - name: movement_date
     description: Calendar date on which the inventory movement was recorded.
     data_type: Date32
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: calendar_date
   - name: recorded_delta_qty
     description: Recorded quantity received less recorded quantity issued, in the movement unit.
     data_type: Decimal(18, 6)
@@ -134,6 +176,33 @@ models:
       arguments:
         source_relation: ref('stg_inventory_movements')
         primary_key: inventory_movement_id
+  - dimensional_join_cardinality:
+      name: fct_inventory_movement_dimension_join_cardinality
+      arguments:
+        grain:
+        - inventory_movement_id
+        dimensions:
+        - to: ref('dim_product')
+          field: product_id
+          target_field: product_id
+        - to: ref('dim_warehouse')
+          field: warehouse_id
+          target_field: warehouse_id
+        - to: ref('dim_unit')
+          field: opening_stock_unit_id
+          target_field: unit_id
+        - to: ref('dim_unit')
+          field: received_unit_id
+          target_field: unit_id
+        - to: ref('dim_unit')
+          field: issued_unit_id
+          target_field: unit_id
+        - to: ref('dim_unit')
+          field: closing_stock_unit_id
+          target_field: unit_id
+        - to: ref('dim_date')
+          field: movement_date
+          target_field: calendar_date
 - name: fct_inventory_daily_observed
   description: Closing stock observations and recorded flows on dates with inventory movements.
   config:
@@ -157,16 +226,28 @@ models:
     data_type: UInt32
     data_tests:
     - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_product')
+          field: product_id
   - name: warehouse_id
     description: Identifier of the storage location.
     data_type: UInt32
     data_tests:
     - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_warehouse')
+          field: warehouse_id
   - name: observation_date
     data_type: Date32
     description: Calendar date with one or more recorded inventory movements.
     data_tests:
     - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: calendar_date
   - name: last_inventory_movement_id
     data_type: UInt32
     description: Identifier of the final movement in export order on the observed date.
@@ -182,6 +263,12 @@ models:
   - name: stock_unit_id
     data_type: UInt32
     description: Unit of the recorded stock quantity.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_unit')
+          field: unit_id
   - name: last_segment_id
     data_type: String
     description: Continuity segment of the final observed movement on the date.
@@ -202,8 +289,7 @@ models:
     description: Number of recorded movements on the observed date.
   - name: discontinuity_count
     data_type: UInt64
-    description: Number of movements whose opening differs from the preceding recorded closing on the
-      observed date.
+    description: Number of movements whose opening differs from the preceding recorded closing on the observed date.
   - name: segment_count
     data_type: UInt64
     description: Number of continuity segments observed on the date.
@@ -218,9 +304,29 @@ models:
     data_type: UInt8
   - name: has_ambiguous_latest_timestamp
     data_type: UInt8
-    description: Whether different closing quantities are recorded at the latest timestamp on the observed
-      date.
+    description: Whether different closing quantities are recorded at the latest timestamp on the observed date.
   data_tests:
   - unique_grain:
       arguments:
         columns: *id002
+  - dimensional_join_cardinality:
+      name: fct_inventory_daily_observed_dimension_join_cardinality
+      arguments:
+        grain:
+        - dataset_name
+        - product_id
+        - warehouse_id
+        - observation_date
+        dimensions:
+        - to: ref('dim_product')
+          field: product_id
+          target_field: product_id
+        - to: ref('dim_warehouse')
+          field: warehouse_id
+          target_field: warehouse_id
+        - to: ref('dim_unit')
+          field: stock_unit_id
+          target_field: unit_id
+        - to: ref('dim_date')
+          field: observation_date
+          target_field: calendar_date

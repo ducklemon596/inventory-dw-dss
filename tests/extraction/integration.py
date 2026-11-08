@@ -209,6 +209,7 @@ def main():
                        'DBT_TARGET_PATH': f'{temp}/dbt-target', 'DBT_LOG_PATH': f'{temp}/dbt-logs'}
                 subprocess.run(['uv', 'run', '--locked', '--directory', str(ROOT / 'transform/dbt'),
                                 'dbt', 'build', '--select', 'path:models/staging',
+                                '--vars', '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}',
                                 '--exclude', 'path:tests/intermediate', 'path:tests/marts',
                                 '--indirect-selection', 'cautious'], env=env, check=True)
                 results = json.loads(Path(temp, 'dbt-target/run_results.json').read_text())['results']

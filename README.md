@@ -7,7 +7,7 @@ A pharmaceutical sales and inventory warehouse for analysis and future decision 
 ```mermaid
 flowchart LR
     PG[(PostgreSQL OLTP)] --> EX[Python extraction] --> RAW[(ClickHouse raw)]
-    RAW --> ST[dbt staging] --> INT[dbt intermediate] --> MART[Inventory marts]
+    RAW --> ST[dbt staging] --> INT[dbt intermediate] --> MART[Sales and inventory marts]
     MART -. future .-> DSS[DSS]
     CSV[Optional OLTP bootstrap] -. initialization only .-> PG
 ```
@@ -19,7 +19,7 @@ Extraction reads OLTP; CSV files are used only by the optional OLTP bootstrap an
 | Path | Responsibility |
 |---|---|
 | `src/inventory_dw_dss/` | CLI, extraction, optional OLTP bootstrap, read-only validators |
-| `transform/dbt/` | Staging, sales/inventory intermediate models, inventory marts, seeds, tests |
+| `transform/dbt/` | Staging, sales/inventory intermediate models, conformed dimensions, facts, seeds, tests |
 | `sql/oltp/` | Transactional schema and bootstrap loading SQL |
 | `infra/` | PostgreSQL and ClickHouse services |
 | `data/` | Source files, bootstrap outputs, governed references |
@@ -46,7 +46,8 @@ CSV bootstrap is a separate, optional one-time workflow for reconstructing OLTP.
 
 - PostgreSQL-to-ClickHouse raw extraction with reconciliation and per-table publication.
 - Twelve typed and normalized staging views.
-- Recorded sales enrichment, observed daily sales by original unit, and governed UOM conversion.
+- Recorded sales enrichment, observed daily sales by original unit, and a sales-line fact preserving governed UOM conversion.
+- Shared product, unit and date dimensions; warehouse dimension for inventory facts.
 - Source-ordered inventory ledgers, continuity segments, gap diagnostics, movement facts and daily observed inventory facts.
 - Source, grain, balance, lineage and UOM quality checks.
 
@@ -70,4 +71,4 @@ Disposable database integration checks and read-only data validators are describ
 
 Inventory models preserve recorded observations; they do not certify physical or available stock. Source order uses the verified export's `dataset_row_number` within dataset, product and warehouse. Gaps remain visible; each starts a separately anchored segment. Missing dates are not filled or carried forward, and conflicting latest-time observations are flagged. Sales quantities stay in their original units unless an explicitly approved, version-pinned UOM factor applies. Sales are not classified as net of returns. The data does not establish historical transaction arrival/correction times, warehouse assignment for sales, or point-in-time availability.
 
-See [architecture](docs/architecture.md), [intermediate rules](docs/intermediate.md), [historical inventory](docs/historical-inventory.md), [UOM governance](docs/uom.md), [source-sequence evidence](docs/source-sequence-integrity.md), and [OLTP schema](docs/oltp/schema.md).
+See [star schema](docs/design/star-schema.md), [architecture](docs/architecture.md), [intermediate rules](docs/intermediate.md), [historical inventory](docs/historical-inventory.md), [UOM governance](docs/uom.md), [source-sequence evidence](docs/source-sequence-integrity.md), and [OLTP schema](docs/oltp/schema.md).
