@@ -31,26 +31,39 @@ Facts reuse source keys; they do not join Dimensions during materialization. Rel
 
 An illustrative raw sales row stores quantity `'2.000000'`, a numeric product ID as text and an original unit ID. Staging parses the ID and Decimal quantity; enrichment adds the product's DrugCode and unit label Box. Conversion compares that unit with stock evidence across the product/export. If the verified stock unit is Tab and the selected mapping approves factor 10, `stock_unit_qty` becomes 20 Tab. Otherwise it remains NULL unless verified identity applies. `fct_sales_line` copies all 57 conversion columns, including the original 2 Box and provenance. No warehouse is inferred.
 
-## Running and selecting models
+## Run transformations
 
-All commands below run from the repository root, after extraction completes:
+Prerequisites: the local ClickHouse service is healthy and raw has been loaded successfully. Run from the repository root. The public command supplies the project/profile paths and uses the fixed `uom_mapping_version` in [dbt_project.yml](dbt_project.yml):
 
 ```bash
-uv run --locked dbt debug --project-dir transform/dbt --profiles-dir transform/dbt
-uv run --locked dbt parse --project-dir transform/dbt --profiles-dir transform/dbt
-uv run --locked dbt compile --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
-uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
-# Sales ancestors plus its conformed Dimensions:
-uv run --locked dbt build --select +fct_sales_line dim_product dim_unit dim_date --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
-# Tests against an already built model:
-uv run --locked dbt test --select fct_sales_line --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+uv run --locked inventory-dw-dss transform
 ```
 
-`+model` selects ancestors; `model+` selects descendants; `staging` selects that model directory. Cross-model tests can read unselected relations, which must exist and be current. Use full builds for broad source changes and acceptance. `state:modified` detects code/config changes, not changed raw rows. Compilation checks rendering, not row preservation or correct measures. [Test instructions](../../tests/README.md) explain failure diagnosis.
+It delegates to dbt build: load the governed seed, create views, fully rebuild table models and execute data/unit tests. It does not load PostgreSQL or raw. A dbt failure returns a nonzero CLI exit code; already published relations are not rolled back as a group.
+
+Run the complete transform once before targeted work. Selected checks can read existing unselected relations. For selected work and tests:
+
+```bash
+uv run --locked inventory-dw-dss transform --select staging
+uv run --locked inventory-dw-dss transform --select +fct_sales_line dim_product dim_unit dim_date
+uv run --locked inventory-dw-dss transform --test
+uv run --locked inventory-dw-dss transform --test --select fct_sales_line
+uv run --locked inventory-dw-dss transform --help
+```
+
+`--select` accepts one or more model/layer expressions. The public layer names `staging`, `intermediate`, `marts` and `dimensions` resolve to their repository paths; native model/path expressions pass through. `+MODEL` includes ancestors, `MODEL+` includes descendants. Selecting a fact's ancestors does not select its logical dimensions automatically, hence the sales example names them. A layer selection expects unselected parents to exist. Cross-model tests can also read unselected relations. Use the complete build for acceptance.
+
+The default version is the explicit published value stored in the project, not a moving latest-version alias. To specify the publication explicitly (replace the example with another supported version when needed):
+
+```bash
+uv run --locked inventory-dw-dss transform --uom-version uom_mapping_v2_2026-11-08
+```
+
+Use the same version override with `--test`. The [coverage analyses](analyses/README.md) document their native dbt version option. Tests do not recreate an existing conversion view's stored version literal. `state:modified` is a dbt code/config selection concept; it does not detect raw data changes. [Test instructions](../../tests/README.md) explain regression order and failure diagnosis.
 
 ## Views, tables and refresh boundaries
 
-Views reflect current upstream tables when queried, not when created. Ledger, segments, Dimensions and Facts persist rows and require a rebuild. Full table rebuilds are intentional: changed predecessor rows can split/merge segments and affect later rows, and new inventory evidence or a new mapping version can change historical sales conversion. No incremental dbt materialization is implemented. Full rebuilds are retained because inventory predecessor and segment changes can affect later ledger rows, while changed stock-unit evidence or UOM mapping versions can alter historical sales conversions. The current full-build runtime has been measured at roughly 30 seconds for 324 dbt nodes on the development dataset; the dataset does not currently justify the invalidation and recovery complexity of incremental tables.
+Views query current upstream relations. Ledger, segments, dimensions and facts persist rows and require rebuilding. Full rebuilds are intentional: predecessor changes can alter later inventory segments, while stock-unit evidence or mapping changes can alter historical sales conversion. No incremental dbt materialization is configured. Complete builds have been measured at roughly 30 seconds for the current dataset and 324 dbt nodes; the project retains the simpler full-rebuild strategy.
 
 Table replacements are published per relation; a full build is not one database transaction. Keep extraction and dbt sequential, keep the seed stable while readers use conversion views, and release DSS consumption only after successful complete validation. Rerun the affected chain after a failure; do not treat old and newly rebuilt facts as one accepted release.
 
@@ -58,11 +71,16 @@ Table replacements are published per relation; a full build is not one database 
 
 `dbt_project.yml` sets model folders, default view/table materializations, seed types, NULL-preserving JOIN settings and the default UOM version. `profiles.yml` supplies the ClickHouse endpoint, schema and credentials through environment variables with local defaults; it can host profiles for other projects too. Profile name must match the project's `profile` key. `.user.yml` is generated local dbt state, not a project input.
 
-Explicitly pin `uom_mapping_version` in builds and matching tests/analyses. The version literal is stored in the conversion view definition. Updating a seed or passing `--vars` only to a query does not recreate that view. New approvals require a new immutable reference snapshot, updated seed/publication tests and a rebuilt sales branch. Follow [UOM publishing](seeds/README.md); never overwrite a published version.
+The wrapper uses the project-pinned `uom_mapping_version`; use `--uom-version` consistently when selecting a different publication. The version literal is stored in the conversion view definition. Updating a seed or selecting a different version only for a query does not recreate that view. New approvals require a new immutable reference snapshot, updated seed/publication tests and a rebuilt sales branch. Follow [UOM publishing](seeds/README.md); never overwrite a published version.
 
-## Inspecting the graph and SQL
+## Maintainer inspection
+
+Normal operations use `transform`. Native dbt tools remain available for debugging, compilation, graph inspection and generated documentation:
 
 ```bash
+uv run --locked dbt debug --project-dir transform/dbt --profiles-dir transform/dbt
+uv run --locked dbt parse --project-dir transform/dbt --profiles-dir transform/dbt
+uv run --locked dbt compile --project-dir transform/dbt --profiles-dir transform/dbt
 uv run --locked dbt ls --select +fct_sales_line --resource-type model --output name --project-dir transform/dbt --profiles-dir transform/dbt
 uv run --locked dbt docs generate --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
 uv run --locked dbt docs serve --project-dir transform/dbt --profiles-dir transform/dbt --port 8080
@@ -72,4 +90,12 @@ The local docs site shows lineage and YAML descriptions. `target/manifest.json` 
 
 ## Extending safely
 
-Define a new output grain first. Put reusable transformations in Intermediate and consumer-specific models in a clearly named Marts subfolder. Use `ref()` for parents, explicit columns/types and a companion YAML contract. Add uniqueness, relationships, row/measure reconciliation and business-boundary fixtures as appropriate. Build parents, new output and affected descendants with the version pinned, then run the full suite. Do not remove strict casts or overwrite NULL with zero to silence a failure. The [DSS guide](../../docs/dss-handover.md) provides worked maintenance scenarios.
+Define a new output grain first. Put reusable transformations in Intermediate and consumer-specific models in a clearly named Marts subfolder. Use `ref()` for parents, explicit columns/types and a companion YAML contract. Add uniqueness, relationships, row/measure reconciliation and business-boundary fixtures as appropriate. Build parents, new output and affected descendants with the version pinned, then run the full suite. Do not remove strict casts or overwrite NULL with zero to silence a failure. The [layer model guides](models/README.md) identify the owning SQL and affected consumers; [DSS handover](../../docs/dss-handover.md) defines the consumer boundary.
+
+## SQL, YAML and README conventions
+
+Use uppercase SQL keywords, four-space SQL indentation and one clearly named CTE per transformation step. Keep ClickHouse function names and business literals in their required spelling. Separate CTEs and role-specific joins with line breaks. Comments explain decisions such as missing unit evidence, source-order ties and observed balance selection; field lists and obvious clauses do not need a running commentary.
+
+YAML uses two-space indentation with indented sequences. Keep `name`, `description`, `data_type` and existing test/config declarations adjacent in field contracts. Descriptions state business meaning, measurement unit and calculation/interpretation where needed. Source YAML describes extracted fields; model YAML describes the actual selected output. Unit fixtures remain beside the models they exercise.
+
+The domain README is the maintenance entry point: purpose, grain, parents, transformations, output groups, consumers and change impact. YAML is the detailed field reference. When inspecting an unfamiliar model, read its domain README, SQL CTEs and YAML in that order, then use the compiled graph to check consumers. Full source/types/tests/contracts must remain synchronized when implementing a reviewed business change.

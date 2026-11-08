@@ -1,13 +1,14 @@
-with cleaned as (
-    select
-        {{ stg_text('unit_id', []) }} as unit_id,
+-- Unit labels are preserved exactly; conversion factors are governed separately for each product.
+WITH cleaned AS (
+    SELECT
+        {{ stg_text('unit_id', []) }} AS unit_id,
 
-        {{ stg_text('unit_code', []) }} as unit_code
-    from {{ source('raw', 'unit') }}
+        {{ stg_text('unit_code', []) }} AS unit_code
+    FROM {{ source('raw', 'unit') }}
 )
 
-select
-    {{ stg_integer('unit_id', 'UInt32', positive=true) }} as unit_id,
+SELECT
+    {{ stg_integer('unit_id', 'UInt32', positive=true) }} AS unit_id,
 
-    CAST(unit_code AS LowCardinality(String)) as unit_code
-from cleaned
+    CAST(unit_code AS LowCardinality(String)) AS unit_code
+FROM cleaned

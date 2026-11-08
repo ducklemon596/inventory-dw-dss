@@ -2,15 +2,18 @@
 Run: uv run --group bootstrap python tests/oltp_ingestion/integration.py
 """
 import csv
+from contextlib import nullcontext
 from datetime import date
 import json
 from pathlib import Path
 import subprocess
 import tempfile
 from uuid import uuid4
+from unittest.mock import patch
 
 import pandas as pd
 
+from inventory_dw_dss.cli import main as command
 from inventory_dw_dss.oltp_ingestion.loading import database, run_upsert, selected_inputs
 from inventory_dw_dss.oltp_ingestion.preprocessing import RAW_COLUMNS, prepare
 
@@ -144,6 +147,49 @@ def main():
                 run_upsert(psql, ROOT, inputs)
                 assert sql(psql, "SELECT count(*) FROM oltp.product_batch WHERE batch_number='NO_EXPIRY' AND expiry_date IS NULL") == '1'
                 checks.append('NULL expiry natural key does not duplicate batches on repeat')
+                # Exercise copy-paste public commands with source files and a separate empty DB.
+                cli_db = name + '_cli'
+                sql(admin, f'CREATE DATABASE {cli_db}')
+                cli_psql = psql.copy()
+                cli_psql[cli_psql.index('-d') + 1] = cli_db
+                try:
+                    cli_root = root / 'cli'
+                    (cli_root / 'data/raw').mkdir(parents=True)
+                    (cli_root / 'sql').symlink_to(ROOT / 'sql', target_is_directory=True)
+                    for kind in ('sales', 'stock'):
+                        (cli_root / f'data/raw/{kind}_raw.csv').write_text((root / f'data/raw/{kind}_raw.csv').read_text())
+                    with patch('inventory_dw_dss.cli.project_root', return_value=cli_root), patch(
+                        'inventory_dw_dss.oltp_ingestion.loading.database', side_effect=lambda _: nullcontext(cli_psql)
+                    ):
+                        command(['load', 'postgres', '--start', '2023-01-03', '--end', '2023-01-03'])
+                        assert sql(cli_psql, 'SELECT count(*) FROM oltp.sales_line') == '1'
+                        assert sql(cli_psql, 'SELECT count(*) FROM oltp.inventory_movement') == '1'
+                        identity = sql(cli_psql, 'SELECT sales_line_id FROM oltp.sales_line WHERE source_row_number=2')
+                        manifest = cli_root / 'data/processed/1mo/manifest.json'
+                        prepared_at = manifest.read_text()
+                        command(['load', 'postgres', '--start', '2023-01-03', '--end', '2023-01-03'])
+                        assert manifest.read_text() == prepared_at
+                        assert sql(cli_psql, 'SELECT sales_line_id FROM oltp.sales_line WHERE source_row_number=2') == identity
+                        command(['load', 'postgres', '--full'])
+                        assert sql(cli_psql, 'SELECT count(*) FROM oltp.sales_line') == '2'
+                        assert sql(cli_psql, 'SELECT count(*) FROM oltp.inventory_movement') == '2'
+                        command(['load', 'postgres', '--full'])
+                        receipt = json.loads((cli_root / 'reports/oltp_ingestion/load_summary.json').read_text())
+                        assert all(value['unchanged'] == 2 for value in receipt['datasets'].values())
+                        # Changed original source invalidates preparation, then updates the same PK.
+                        sales_path = cli_root / 'data/raw/sales_raw.csv'
+                        changed = pd.read_csv(sales_path, dtype='string', keep_default_na=False)
+                        changed.loc[changed['RowNumber'] == '2', 'Quantity'] = '7'
+                        changed.to_csv(sales_path, index=False)
+                        command(['load', 'postgres', '--start', '2023-01-03', '--end', '2023-01-03', '--dataset', 'sales'])
+                        assert sql(cli_psql, "SELECT sales_line_id::text || '|' || quantity::text FROM oltp.sales_line WHERE source_row_number=2") == identity + '|7'
+                        changed = changed[changed['RowNumber'] == '2']
+                        changed.to_csv(sales_path, index=False)
+                        command(['load', 'postgres', '--full'])
+                        assert sql(cli_psql, 'SELECT count(*) FROM oltp.sales_line') == '2'
+                    checks.append('public PostgreSQL full/range CLI auto-prepares, reuses cache, refreshes changed sources and preserves PKs/unmatched rows')
+                finally:
+                    sql(admin, f'DROP DATABASE {cli_db} WITH (FORCE)')
             report = {'status': 'passed', 'checks': checks, 'isolated_database_removed': True}
             print(json.dumps(report, indent=2))
         finally:

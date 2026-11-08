@@ -1,6 +1,6 @@
 # UOM coverage analyses
 
-These SQL analyses inspect existing views; they do not materialize additional models.
+These SQL analyses inspect existing conversion views. They return coverage result sets without materializing additional models. `uom_coverage_summary` reads `int_sales_quantity_converted` and `int_sales_uom_coverage`; `uom_coverage_measurement` reads the latter and adds an original-unit quantity coverage percentage.
 
 | Analysis | Meaning |
 |---|---|

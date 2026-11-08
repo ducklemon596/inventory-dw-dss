@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: raw
-    schema: '{{ env_var(''CLICKHOUSE_RAW_SCHEMA'', ''raw'') }}'
+    schema: "{{ env_var('CLICKHOUSE_RAW_SCHEMA', 'raw') }}"
     description: Pharmacy sales, stock movements and the product and operational records associated with them.
 
     tables:
@@ -51,7 +51,7 @@ sources:
             data_type: String
 
           - name: drug_code
-            description: Code used by the pharmacy to identify the product.
+            description: Product code assigned by the pharmacy (DrugCode), distinct from the numeric product identifier.
             data_type: String
 
           - name: drug_name
@@ -107,7 +107,8 @@ sources:
             data_type: String
 
       - name: sales_invoice
-        description: Sales invoices grouping the items recorded in a sale.
+        description: >-
+          Sales invoice codes grouping source sales lines; shared time, payment or fee allocation is not assumed.
 
         columns:
           - name: invoice_id
@@ -147,11 +148,15 @@ sources:
             data_type: String
 
           - name: source_dataset
-            description: Name of the dataset containing the transaction.
+            description: >-
+              Source dataset containing the recorded transaction; scopes the original record number and inventory
+              ledger.
             data_type: String
 
           - name: source_row_number
-            description: Original record number within the transaction dataset.
+            description: >-
+              Original row number within the source dataset. Defines export order, with gaps permitted within an
+              individual product ledger.
             data_type: String
 
           - name: invoice_id
@@ -199,11 +204,14 @@ sources:
             data_type: Nullable(String)
 
           - name: quantity
-            description: Quantity of the product sold.
+            description: >-
+              Original signed sales quantity recorded in unit_id, before analytical normalization or stock-unit
+              conversion.
             data_type: String
 
           - name: unit_price
-            description: Selling price per unit of the product.
+            description: Recorded selling price per original sales unit; the monetary denomination follows the source
+              record.
             data_type: String
 
           - name: price_tier
@@ -211,43 +219,55 @@ sources:
             data_type: Nullable(String)
 
           - name: discount_pct
-            description: Discount percentage recorded with the sales item.
+            description: Discount percentage recorded with the sales line, on a scale from 0 to 100.
             data_type: Nullable(String)
 
           - name: discount_amount
-            description: Discount amount recorded with the sales item.
+            description: Discount amount recorded with the sales line, in the source monetary denomination.
             data_type: Nullable(String)
 
           - name: service_fee
-            description: Service fee recorded with the sales item.
+            description: >-
+              Service fee recorded with this sales line, in the source monetary denomination; invoice allocation
+              is unverified.
             data_type: Nullable(String)
 
           - name: packaging_fee
-            description: Packaging fee recorded with the sales item.
+            description: >-
+              Packaging fee recorded with this sales line, in the source monetary denomination; invoice allocation
+              is unverified.
             data_type: Nullable(String)
 
           - name: subtotal
-            description: Subtotal recorded with the sales item before subsequent adjustments.
+            description: >-
+              Subtotal supplied with the sales line, in the source monetary denomination; preserved rather than
+              recalculated.
             data_type: Nullable(String)
 
           - name: invoice_discount_pct
-            description: Invoice discount percentage recorded with the sales item.
+            description: >-
+              Invoice discount percentage recorded with this sales line, on a scale from 0 to 100; retained without
+              invoice-level allocation.
             data_type: Nullable(String)
 
           - name: promo_discount_pct
-            description: Promotional discount percentage recorded with the sales item.
+            description: Promotion discount percentage recorded with the sales line, on a scale from 0 to 100.
             data_type: Nullable(String)
 
           - name: tax_pct
-            description: Tax percentage recorded with the sales item.
+            description: Tax percentage recorded with the sales line, on a scale from 0 to 100.
             data_type: Nullable(String)
 
           - name: additional_fee
-            description: Additional fee recorded with the sales item.
+            description: >-
+              Additional fee recorded with this sales line, in the source monetary denomination; invoice allocation
+              is unverified.
             data_type: Nullable(String)
 
           - name: total_price
-            description: Final amount recorded with the sales item.
+            description: >-
+              Final amount supplied with the sales line, in the source monetary denomination; preserved rather than
+              recalculated.
             data_type: Nullable(String)
 
           - name: payment_type
@@ -267,7 +287,7 @@ sources:
             data_type: Nullable(String)
 
           - name: shift_date
-            description: Business date of the sales shift.
+            description: Date recorded in the shift designation, which may differ from the sales event date.
             data_type: Nullable(String)
 
           - name: shift_period
@@ -283,7 +303,7 @@ sources:
             data_type: Nullable(String)
 
       - name: inventory_document
-        description: Inventory documents associated with stock movements.
+        description: Document codes associated with inventory movements; the same code can span dates and locations.
 
         columns:
           - name: document_id
@@ -295,8 +315,9 @@ sources:
             data_type: String
 
       - name: inventory_movement
-        description: Individual stock movements for a product at a storage location, including quantities before
-          and after the movement.
+        description: >-
+          Individual stock movements for a product at a storage location, including quantities before and after
+          the movement.
 
         columns:
           - name: movement_id
@@ -304,11 +325,15 @@ sources:
             data_type: String
 
           - name: source_dataset
-            description: Name of the dataset containing the transaction.
+            description: >-
+              Source dataset containing the recorded transaction; scopes the original record number and inventory
+              ledger.
             data_type: String
 
           - name: source_row_number
-            description: Original record number within the transaction dataset.
+            description: >-
+              Original row number within the source dataset. Defines export order, with gaps permitted within an
+              individual product ledger.
             data_type: String
 
           - name: document_id
@@ -352,35 +377,35 @@ sources:
             data_type: Nullable(String)
 
           - name: initial_stock
-            description: Stock quantity recorded before the movement.
+            description: Original opening stock quantity recorded in initial_unit_id, before analytical normalization.
             data_type: String
 
           - name: stock_in
-            description: Quantity received in the movement.
+            description: Original inbound stock quantity recorded in in_unit_id, before analytical normalization.
             data_type: String
 
           - name: stock_out
-            description: Quantity issued in the movement.
+            description: Original outbound stock quantity recorded in out_unit_id, before analytical normalization.
             data_type: String
 
           - name: remaining_stock
-            description: Stock quantity recorded after the movement.
+            description: Original closing stock quantity recorded in remaining_unit_id, before analytical normalization.
             data_type: String
 
           - name: initial_unit_id
-            description: Unit used for the stock quantity before the movement.
+            description: Identifier of the unit in which the opening stock quantity was recorded.
             data_type: String
 
           - name: in_unit_id
-            description: Unit used for the received quantity.
+            description: Identifier of the unit in which the inbound quantity was recorded.
             data_type: String
 
           - name: out_unit_id
-            description: Unit used for the issued quantity.
+            description: Identifier of the unit in which the outbound quantity was recorded.
             data_type: String
 
           - name: remaining_unit_id
-            description: Unit used for the stock quantity after the movement.
+            description: Identifier of the unit in which the closing stock quantity was recorded.
             data_type: String
 
           - name: transaction_type

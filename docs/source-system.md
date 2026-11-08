@@ -14,11 +14,9 @@ The optional CSV bootstrap reconstructs OLTP. The operational DW extracts from t
 
 ## Export lineage evidence
 
-The supplied export has a validated row sequence for this export vintage. `RowNumber` is retained as `source_row_number` in PostgreSQL and as `dataset_row_number` in ClickHouse Staging and Intermediate. Generated identity keys are separate. Within inventory product–warehouse ledgers, ordering by this source sequence preserves the validated observation order; it is not a general POS-native event sequence or a CDC version.
+`RowNumber` is retained as `source_row_number` in PostgreSQL and as `dataset_row_number` in ClickHouse Staging and Intermediate. Generated identity keys are separate and are not event-order keys. Inventory ledger models use the retained source sequence to order rows within a dataset/product/warehouse group. This preserves the source export order represented in the database; it does not claim a native POS clock or CDC version. Details of the ordering and segmentation calculations are maintained in the [inventory Intermediate README](../transform/dbt/models/intermediate/inventory/README.md).
 
-The 2026-11-08 validation compared source records through six available layers: original and prepared exports, PostgreSQL, ClickHouse raw, Staging and enriched Intermediate. For the scoped `pharmacy_2023_2025` export, it found 804,027 inventory rows and 649,656 sales rows with unique, non-null, gap-free source sequences; payload and identifier comparisons matched at each hop. Inventory continuity had 188 observed gaps across 8,147 product–warehouse ledgers. These are dated validation results for one export, not permanent constraints or proof of physical stock.
-
-The passport fingerprints bind ordered source rows to normalized content. The research provenance for how the workbook's displayed row number became CSV `RowNumber` was supplied separately; the original workbook was unavailable for independent re-extraction. Detailed fingerprint serialization and validator behavior belong to the [validation code guide](../src/inventory_dw_dss/validation/README.md). The immutable passport is retained under [`data/reference`](../data/reference/README.md).
+An export passport remains in [`data/reference`](../data/reference/README.md) as archival research provenance. It is not a dependency of extraction, dbt transformations or production tests. Source-row ordering, ledger predecessors, segment reconstruction and observed daily selection are covered by reusable dbt tests next to the models.
 
 ## Source limitations
 

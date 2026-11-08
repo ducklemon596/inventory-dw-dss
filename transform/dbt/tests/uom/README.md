@@ -5,7 +5,7 @@ Tests enforce selected version existence, published counts/domains, unique versi
 **Failure interpretation:** Check version pin and immutable source, then exact business-code/unit match and stock evidence. Candidate/quarantined numeric evidence is not authorization. A new version needs explicit reviewed publication contracts.
 
 ```bash
-uv run --locked dbt test --select int_sales_quantity_converted int_product_stock_units int_sales_uom_coverage --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+uv run --locked inventory-dw-dss transform --test --select int_sales_quantity_converted int_product_stock_units int_sales_uom_coverage
 ```
 
-This tests existing relations; build them and their required parents first. Model selections include attached tests, including cross-model dependencies. Use the [full acceptance build](../../../../tests/README.md) after changes. Relevant schema YAML and native fixtures live beside [the models](../../models/README.md). Read generated failing SQL under `target/compiled/inventory_dw/` from the dbt project, not these source templates.
+Build required inputs first. See the [test guide](../README.md) for selection and failure diagnosis; field contracts and native fixtures live beside [the models](../../models/README.md).

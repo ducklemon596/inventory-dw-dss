@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from .preprocessing import SCHEMA_VERSION, SOURCE_DATASET, checksum, columns_for, partition_lock
+from .preprocessing import SCHEMA_VERSION, SOURCE_DATASET, checksum, columns_for, partition_lock, prepare
 
 
 def literal(value: str) -> str:
@@ -34,29 +34,29 @@ def selected_inputs(root: Path, interval: str, dataset: str, start: date | None,
     directory = root / 'data' / 'processed' / interval
     manifest_path = directory / 'manifest.json'
     if not manifest_path.is_file():
-        raise ValueError(f'Missing prepared data. Run: uv run --group bootstrap inventory-dw-dss bootstrap prepare --interval {interval}')
+        raise ValueError('Missing prepared data. Run: uv run --locked --group bootstrap inventory-dw-dss load postgres --full')
     manifest = json.loads(manifest_path.read_text())
     if not isinstance(manifest, dict):
-        raise ValueError('Invalid manifest structure. Run prepare again.')
+        raise ValueError('Invalid manifest structure. Remove the generated partition cache and rerun load postgres.')
     if manifest.get('schema_version') != SCHEMA_VERSION or manifest.get('interval') != interval or manifest.get('source_dataset') != SOURCE_DATASET:
-        raise ValueError('Incompatible manifest. Run prepare again.')
+        raise ValueError('Incompatible manifest. Remove the generated partition cache and rerun load postgres.')
     if not isinstance(manifest.get('partitions'), list) or not isinstance(manifest.get('sources'), dict) or not isinstance(manifest.get('warnings'), dict):
-        raise ValueError('Invalid manifest structure. Run prepare again.')
+        raise ValueError('Invalid manifest structure. Remove the generated partition cache and rerun load postgres.')
     selected = []
     counts = {'sales': 0, 'stock': 0}
     seen_files = set()
     for kind in ('sales', 'stock'):
         source = manifest['sources'].get(kind)
         if not isinstance(source, dict) or source.get('columns') != columns_for(kind):
-            raise ValueError(f'{kind}: incompatible prepared column schema; run prepare again')
+            raise ValueError(f'{kind}: incompatible prepared column schema; remove the generated partition cache and rerun load postgres')
         # Even an unselected dataset gets an empty incoming table/file.
         pd.DataFrame(columns=columns_for(kind)).to_csv(output / f'{kind}.csv', index=False)
     for entry in manifest['partitions']:
         required = {'dataset', 'path', 'start', 'end', 'rows', 'sha256'}
         if not isinstance(entry, dict) or not required.issubset(entry):
-            raise ValueError('Incomplete partition manifest. Run prepare again.')
+            raise ValueError('Incomplete partition manifest. Remove the generated partition cache and rerun load postgres.')
         if not all(isinstance(entry[key], str) for key in ('dataset', 'path', 'start', 'end', 'sha256')) or not isinstance(entry['rows'], int) or entry['rows'] < 1:
-            raise ValueError('Invalid partition metadata. Run prepare again.')
+            raise ValueError('Invalid partition metadata. Remove the generated partition cache and rerun load postgres.')
         try:
             lower, upper = date.fromisoformat(entry['start']), date.fromisoformat(entry['end'])
         except ValueError as error:
@@ -75,7 +75,7 @@ def selected_inputs(root: Path, interval: str, dataset: str, start: date | None,
             raise ValueError('Invalid/duplicate partition path in manifest')
         seen_files.add(path)
         if not path.is_file() or checksum(path) != entry['sha256']:
-            raise ValueError(f'Partition missing/modified: {entry["path"]}. Run prepare again.')
+            raise ValueError(f'Partition missing/modified: {entry["path"]}. Remove the generated partition cache and rerun load postgres.')
         file_rows = kept = 0
         with pd.read_csv(path, dtype="string", keep_default_na=False, chunksize=100_000) as reader:
             for chunk in reader:
@@ -139,6 +139,45 @@ def run_upsert(psql: list[str], root: Path, files: Path, *, source_dataset: str 
         return json.loads(lines[0])
 
 
+def load_source(root: Path, *, dataset: str = 'both', start: date | None = None,
+                end: date | None = None) -> dict:
+    """Prepare missing/stale monthly source files, then use the existing upsert."""
+    if dataset not in {'sales', 'stock', 'both'}:
+        raise ValueError('dataset must be sales, stock or both')
+    if (start is None) != (end is None):
+        raise ValueError('provide both start and end')
+    if start is not None and start > end:
+        raise ValueError('start must be on or before end')
+    interval = '1mo'
+    sources = {kind: root / 'data/raw' / f'{kind}_raw.csv' for kind in ('sales', 'stock')}
+    for path in sources.values():
+        if not path.is_file():
+            raise ValueError(f'Missing source export: {path}. Place both sales_raw.csv and stock_raw.csv in data/raw/.')
+    with partition_lock(root, interval, exclusive=False):
+        try:
+            manifest = json.loads((root / 'data/processed' / interval / 'manifest.json').read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            manifest = {}
+        current = isinstance(manifest, dict) and (
+            manifest.get('schema_version') == SCHEMA_VERSION
+            and manifest.get('source_dataset') == SOURCE_DATASET
+            and manifest.get('interval') == interval
+            and isinstance(manifest.get('partitions'), list)
+            and isinstance(manifest.get('warnings'), dict)
+            and isinstance(manifest.get('sources'), dict)
+        )
+        if current:
+            for kind, path in sources.items():
+                source = manifest['sources'].get(kind)
+                if not isinstance(source, dict) or source.get('columns') != columns_for(kind) or source.get('sha256') != checksum(path):
+                    current = False
+                    break
+    if not current:
+        print('Preparing source CSVs into monthly partitions...', flush=True)
+        prepare(root, interval)
+    return load(root, interval, dataset, start, end)
+
+
 def load(root: Path, interval: str, dataset: str, start: date | None, end: date | None) -> dict:
     with tempfile.TemporaryDirectory(prefix='inventory-load-') as temporary:
         directory = Path(temporary)
@@ -150,7 +189,7 @@ def load(root: Path, interval: str, dataset: str, start: date | None, end: date 
             result = run_upsert(psql, root, directory)
     report = {'run_id': uuid4().hex, 'loaded_at_utc': datetime.now(timezone.utc).isoformat(),
               'schema_version': SCHEMA_VERSION, 'source_dataset': SOURCE_DATASET, 'interval': interval,
-              'selection': {'dataset': dataset, 'from': start.isoformat() if start else None, 'to': end.isoformat() if end else None},
+              'selection': {'dataset': dataset, 'start': start.isoformat() if start else None, 'end': end.isoformat() if end else None},
               'files': selected, 'preparation_warnings_all_source_rows': manifest['warnings'],
               'reconciliation': 'passed', **result}
     for kind, expected in counts.items():

@@ -1,331 +1,334 @@
 version: 2
+
 unit_tests:
-- name: uom_stock_units_require_agreement_across_warehouses_and_movement_fields
-  model: int_product_stock_units
-  given:
-  - input: ref('stg_inventory_movements')
-    rows:
-    - dataset_name: fixture
-      product_id: 1
-      warehouse_id: 1
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - dataset_name: fixture
-      product_id: 1
-      warehouse_id: 2
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - dataset_name: fixture
-      product_id: 2
-      warehouse_id: 1
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - dataset_name: fixture
-      product_id: 2
-      warehouse_id: 2
-      opening_stock_unit_id: 2
-      received_unit_id: 2
-      issued_unit_id: 2
-      closing_stock_unit_id: 2
-    - dataset_name: fixture
-      product_id: 3
-      warehouse_id: 1
-      opening_stock_unit_id: 1
-      received_unit_id: 2
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-  - input: ref('stg_products')
-    rows:
-    - product_id: 1
-      product_code: SKU_1
-    - product_id: 2
-      product_code: SKU_2
-    - product_id: 3
-      product_code: SKU_3
-  - input: ref('stg_units')
-    rows:
-    - unit_id: 1
-      unit_code: Tab
-    - unit_id: 2
-      unit_code: Box
-  expect:
-    rows:
-    - dataset_name: fixture
-      product_id: 1
-      stock_unit_id: 1
-      stock_unit_code: Tab
-      recorded_stock_unit_count: 1
-      inconsistent_unit_movement_count: 0
-    - dataset_name: fixture
-      product_id: 2
-      stock_unit_id: null
-      stock_unit_code: null
-      recorded_stock_unit_count: 2
-      inconsistent_unit_movement_count: 0
-    - dataset_name: fixture
-      product_id: 3
-      stock_unit_id: null
-      stock_unit_code: null
-      recorded_stock_unit_count: 1
-      inconsistent_unit_movement_count: 1
-- name: uom_preserves_lines_and_applies_only_selected_approved_factors
-  description: Original units, negative and zero quantities remain recorded while only approved or verified same-unit
-    quantities are expressed in stock units.
-  model: int_sales_quantity_converted
-  given:
-  - input: ref('int_sales_lines_enriched')
-    rows:
-    - sales_invoice_line_id: 1
-      dataset_name: fixture
-      dataset_row_number: 1
-      product_id: 1
-      product_code: SKU_1
-      unit_id: 1
-      unit_code: Tab
-      sold_quantity: '1.000001'
-    - sales_invoice_line_id: 2
-      dataset_name: fixture
-      dataset_row_number: 2
-      product_id: 2
-      product_code: SKU_2
-      unit_id: 1
-      unit_code: Box
-      sold_quantity: '1.234567'
-    - sales_invoice_line_id: 3
-      dataset_name: fixture
-      dataset_row_number: 3
-      product_id: 3
-      product_code: SKU_3
-      unit_id: 1
-      unit_code: Strip
-      sold_quantity: '2'
-    - sales_invoice_line_id: 4
-      dataset_name: fixture
-      dataset_row_number: 4
-      product_id: 4
-      product_code: SKU_4
-      unit_id: 1
-      unit_code: Box
-      sold_quantity: '3'
-    - sales_invoice_line_id: 5
-      dataset_name: fixture
-      dataset_row_number: 5
-      product_id: 5
-      product_code: SKU_5
-      unit_id: 1
-      unit_code: Strip
-      sold_quantity: '4'
-    - sales_invoice_line_id: 6
-      dataset_name: fixture
-      dataset_row_number: 6
-      product_id: 6
-      product_code: SKU_6
-      unit_id: 1
-      unit_code: Kali
-      sold_quantity: '5'
-    - sales_invoice_line_id: 7
-      dataset_name: fixture
-      dataset_row_number: 7
-      product_id: 7
-      product_code: SKU_7
-      unit_id: 1
-      unit_code: Kali
-      sold_quantity: '6'
-    - sales_invoice_line_id: 8
-      dataset_name: fixture
-      dataset_row_number: 8
-      product_id: 2
-      product_code: SKU_2
-      unit_id: 1
-      unit_code: Box
-      sold_quantity: '-1.234567'
-    - sales_invoice_line_id: 9
-      dataset_name: fixture
-      dataset_row_number: 9
-      product_id: 2
-      product_code: SKU_2
-      unit_id: 1
-      unit_code: Box
-      sold_quantity: '0'
-  - input: ref('int_product_stock_units')
-    rows:
-    - dataset_name: fixture
-      product_id: 1
-      product_code: SKU_1
-      stock_unit_id: 1
-      stock_unit_code: Tab
-    - dataset_name: fixture
-      product_id: 2
-      product_code: SKU_2
-      stock_unit_id: 1
-      stock_unit_code: Tab
-    - dataset_name: fixture
-      product_id: 3
-      product_code: SKU_3
-      stock_unit_id: 1
-      stock_unit_code: Tab
-    - dataset_name: fixture
-      product_id: 4
-      product_code: SKU_4
-      stock_unit_id: 1
-      stock_unit_code: Tab
-    - dataset_name: fixture
-      product_id: 5
-      product_code: SKU_5
-      stock_unit_id: 1
-      stock_unit_code: Tab
-    - dataset_name: fixture
-      product_id: 7
-      product_code: SKU_7
-      stock_unit_id: 1
-      stock_unit_code: Fls
-  - input: ref('uom_conversion_mapping')
-    rows:
-    - product_id: SKU_2
-      sales_unit: Box
-      stock_unit: Tab
-      tier: A
-      approval_status: approved
-      factor_approved: '0.125000'
-      factor_candidate: null
-      n_supporting_invoices: 3
-      share_at_mode: '1'
-      price_ratio: null
-      price_check_within_15pct: false
-      evidence_source: Synthetic unit fixture
-      mapping_version: uom_mapping_v2_2026-11-08
-    - product_id: SKU_3
-      sales_unit: Strip
-      stock_unit: Tab
-      tier: B
-      approval_status: candidate
-      factor_approved: null
-      factor_candidate: '999'
-      n_supporting_invoices: 3
-      share_at_mode: '1'
-      price_ratio: null
-      price_check_within_15pct: false
-      evidence_source: Synthetic unit fixture
-      mapping_version: uom_mapping_v2_2026-11-08
-    - product_id: SKU_4
-      sales_unit: Box
-      stock_unit: Tab
-      tier: C
-      approval_status: quarantined
-      factor_approved: null
-      factor_candidate: '1000'
-      n_supporting_invoices: 3
-      share_at_mode: '1'
-      price_ratio: null
-      price_check_within_15pct: false
-      evidence_source: Synthetic unit fixture
-      mapping_version: uom_mapping_v2_2026-11-08
-    - product_id: SKU_7
-      sales_unit: Kali
-      stock_unit: Fls
-      tier: A
-      approval_status: approved
-      factor_approved: '1'
-      factor_candidate: null
-      n_supporting_invoices: 3
-      share_at_mode: '1'
-      price_ratio: null
-      price_check_within_15pct: false
-      evidence_source: Synthetic unit fixture
-      mapping_version: uom_mapping_v2_2026-11-08
-    - product_id: SKU_2
-      sales_unit: Box
-      stock_unit: Tab
-      tier: A
-      approval_status: approved
-      factor_approved: '1000'
-      factor_candidate: null
-      n_supporting_invoices: 3
-      share_at_mode: '1'
-      price_ratio: null
-      price_check_within_15pct: false
-      evidence_source: Synthetic unit fixture
-      mapping_version: uom_mapping_v999_2099-01-01
-  expect:
-    rows:
-    - sales_invoice_line_id: 1
-      sold_quantity: '1.000001'
-      unit_code: Tab
-      product_code: SKU_1
-      conversion_status: identity
-      stock_unit_qty: '1.000001'
-      applied_conversion_factor: '1'
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 2
-      sold_quantity: '1.234567'
-      unit_code: Box
-      product_code: SKU_2
-      conversion_status: approved
-      stock_unit_qty: '0.154320875'
-      applied_conversion_factor: '0.125'
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 3
-      sold_quantity: '2'
-      unit_code: Strip
-      product_code: SKU_3
-      conversion_status: candidate
-      stock_unit_qty: null
-      applied_conversion_factor: null
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 4
-      sold_quantity: '3'
-      unit_code: Box
-      product_code: SKU_4
-      conversion_status: quarantined
-      stock_unit_qty: null
-      applied_conversion_factor: null
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 5
-      sold_quantity: '4'
-      unit_code: Strip
-      product_code: SKU_5
-      conversion_status: unmapped
-      stock_unit_qty: null
-      applied_conversion_factor: null
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 6
-      sold_quantity: '5'
-      unit_code: Kali
-      product_code: SKU_6
-      conversion_status: unmapped
-      stock_unit_qty: null
-      applied_conversion_factor: null
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 7
-      sold_quantity: '6'
-      unit_code: Kali
-      product_code: SKU_7
-      conversion_status: approved
-      stock_unit_qty: '6'
-      applied_conversion_factor: '1'
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 8
-      sold_quantity: '-1.234567'
-      unit_code: Box
-      product_code: SKU_2
-      conversion_status: approved
-      stock_unit_qty: '-0.154320875'
-      applied_conversion_factor: '0.125'
-      mapping_version: uom_mapping_v2_2026-11-08
-    - sales_invoice_line_id: 9
-      sold_quantity: '0'
-      unit_code: Box
-      product_code: SKU_2
-      conversion_status: approved
-      stock_unit_qty: '0.000'
-      applied_conversion_factor: '0.125'
-      mapping_version: uom_mapping_v2_2026-11-08
-  overrides:
-    vars:
-      uom_mapping_version: uom_mapping_v2_2026-11-08
+  - name: uom_stock_units_require_agreement_across_warehouses_and_movement_fields
+    model: int_product_stock_units
+    given:
+      - input: ref('stg_inventory_movements')
+        rows:
+          - dataset_name: fixture
+            product_id: 1
+            warehouse_id: 1
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - dataset_name: fixture
+            product_id: 1
+            warehouse_id: 2
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - dataset_name: fixture
+            product_id: 2
+            warehouse_id: 1
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - dataset_name: fixture
+            product_id: 2
+            warehouse_id: 2
+            opening_stock_unit_id: 2
+            received_unit_id: 2
+            issued_unit_id: 2
+            closing_stock_unit_id: 2
+          - dataset_name: fixture
+            product_id: 3
+            warehouse_id: 1
+            opening_stock_unit_id: 1
+            received_unit_id: 2
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+      - input: ref('stg_products')
+        rows:
+          - product_id: 1
+            product_code: SKU_1
+          - product_id: 2
+            product_code: SKU_2
+          - product_id: 3
+            product_code: SKU_3
+      - input: ref('stg_units')
+        rows:
+          - unit_id: 1
+            unit_code: Tab
+          - unit_id: 2
+            unit_code: Box
+    expect:
+      rows:
+        - dataset_name: fixture
+          product_id: 1
+          stock_unit_id: 1
+          stock_unit_code: Tab
+          recorded_stock_unit_count: 1
+          inconsistent_unit_movement_count: 0
+        - dataset_name: fixture
+          product_id: 2
+          stock_unit_id: null
+          stock_unit_code: null
+          recorded_stock_unit_count: 2
+          inconsistent_unit_movement_count: 0
+        - dataset_name: fixture
+          product_id: 3
+          stock_unit_id: null
+          stock_unit_code: null
+          recorded_stock_unit_count: 1
+          inconsistent_unit_movement_count: 1
+
+  - name: uom_preserves_lines_and_applies_only_selected_approved_factors
+    description: >-
+      Original units, negative and zero quantities remain recorded while only approved or verified same-unit quantities
+      are expressed in stock units.
+    model: int_sales_quantity_converted
+    given:
+      - input: ref('int_sales_lines_enriched')
+        rows:
+          - sales_invoice_line_id: 1
+            dataset_name: fixture
+            dataset_row_number: 1
+            product_id: 1
+            product_code: SKU_1
+            unit_id: 1
+            unit_code: Tab
+            sold_quantity: '1.000001'
+          - sales_invoice_line_id: 2
+            dataset_name: fixture
+            dataset_row_number: 2
+            product_id: 2
+            product_code: SKU_2
+            unit_id: 1
+            unit_code: Box
+            sold_quantity: '1.234567'
+          - sales_invoice_line_id: 3
+            dataset_name: fixture
+            dataset_row_number: 3
+            product_id: 3
+            product_code: SKU_3
+            unit_id: 1
+            unit_code: Strip
+            sold_quantity: '2'
+          - sales_invoice_line_id: 4
+            dataset_name: fixture
+            dataset_row_number: 4
+            product_id: 4
+            product_code: SKU_4
+            unit_id: 1
+            unit_code: Box
+            sold_quantity: '3'
+          - sales_invoice_line_id: 5
+            dataset_name: fixture
+            dataset_row_number: 5
+            product_id: 5
+            product_code: SKU_5
+            unit_id: 1
+            unit_code: Strip
+            sold_quantity: '4'
+          - sales_invoice_line_id: 6
+            dataset_name: fixture
+            dataset_row_number: 6
+            product_id: 6
+            product_code: SKU_6
+            unit_id: 1
+            unit_code: Kali
+            sold_quantity: '5'
+          - sales_invoice_line_id: 7
+            dataset_name: fixture
+            dataset_row_number: 7
+            product_id: 7
+            product_code: SKU_7
+            unit_id: 1
+            unit_code: Kali
+            sold_quantity: '6'
+          - sales_invoice_line_id: 8
+            dataset_name: fixture
+            dataset_row_number: 8
+            product_id: 2
+            product_code: SKU_2
+            unit_id: 1
+            unit_code: Box
+            sold_quantity: '-1.234567'
+          - sales_invoice_line_id: 9
+            dataset_name: fixture
+            dataset_row_number: 9
+            product_id: 2
+            product_code: SKU_2
+            unit_id: 1
+            unit_code: Box
+            sold_quantity: '0'
+      - input: ref('int_product_stock_units')
+        rows:
+          - dataset_name: fixture
+            product_id: 1
+            product_code: SKU_1
+            stock_unit_id: 1
+            stock_unit_code: Tab
+          - dataset_name: fixture
+            product_id: 2
+            product_code: SKU_2
+            stock_unit_id: 1
+            stock_unit_code: Tab
+          - dataset_name: fixture
+            product_id: 3
+            product_code: SKU_3
+            stock_unit_id: 1
+            stock_unit_code: Tab
+          - dataset_name: fixture
+            product_id: 4
+            product_code: SKU_4
+            stock_unit_id: 1
+            stock_unit_code: Tab
+          - dataset_name: fixture
+            product_id: 5
+            product_code: SKU_5
+            stock_unit_id: 1
+            stock_unit_code: Tab
+          - dataset_name: fixture
+            product_id: 7
+            product_code: SKU_7
+            stock_unit_id: 1
+            stock_unit_code: Fls
+      - input: ref('uom_conversion_mapping')
+        rows:
+          - product_id: SKU_2
+            sales_unit: Box
+            stock_unit: Tab
+            tier: A
+            approval_status: approved
+            factor_approved: '0.125000'
+            factor_candidate: null
+            n_supporting_invoices: 3
+            share_at_mode: '1'
+            price_ratio: null
+            price_check_within_15pct: false
+            evidence_source: Synthetic unit fixture
+            mapping_version: uom_mapping_v2_2026-11-08
+          - product_id: SKU_3
+            sales_unit: Strip
+            stock_unit: Tab
+            tier: B
+            approval_status: candidate
+            factor_approved: null
+            factor_candidate: '999'
+            n_supporting_invoices: 3
+            share_at_mode: '1'
+            price_ratio: null
+            price_check_within_15pct: false
+            evidence_source: Synthetic unit fixture
+            mapping_version: uom_mapping_v2_2026-11-08
+          - product_id: SKU_4
+            sales_unit: Box
+            stock_unit: Tab
+            tier: C
+            approval_status: quarantined
+            factor_approved: null
+            factor_candidate: '1000'
+            n_supporting_invoices: 3
+            share_at_mode: '1'
+            price_ratio: null
+            price_check_within_15pct: false
+            evidence_source: Synthetic unit fixture
+            mapping_version: uom_mapping_v2_2026-11-08
+          - product_id: SKU_7
+            sales_unit: Kali
+            stock_unit: Fls
+            tier: A
+            approval_status: approved
+            factor_approved: '1'
+            factor_candidate: null
+            n_supporting_invoices: 3
+            share_at_mode: '1'
+            price_ratio: null
+            price_check_within_15pct: false
+            evidence_source: Synthetic unit fixture
+            mapping_version: uom_mapping_v2_2026-11-08
+          - product_id: SKU_2
+            sales_unit: Box
+            stock_unit: Tab
+            tier: A
+            approval_status: approved
+            factor_approved: '1000'
+            factor_candidate: null
+            n_supporting_invoices: 3
+            share_at_mode: '1'
+            price_ratio: null
+            price_check_within_15pct: false
+            evidence_source: Synthetic unit fixture
+            mapping_version: uom_mapping_v999_2099-01-01
+    expect:
+      rows:
+        - sales_invoice_line_id: 1
+          sold_quantity: '1.000001'
+          unit_code: Tab
+          product_code: SKU_1
+          conversion_status: identity
+          stock_unit_qty: '1.000001'
+          applied_conversion_factor: '1'
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 2
+          sold_quantity: '1.234567'
+          unit_code: Box
+          product_code: SKU_2
+          conversion_status: approved
+          stock_unit_qty: '0.154320875'
+          applied_conversion_factor: '0.125'
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 3
+          sold_quantity: '2'
+          unit_code: Strip
+          product_code: SKU_3
+          conversion_status: candidate
+          stock_unit_qty: null
+          applied_conversion_factor: null
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 4
+          sold_quantity: '3'
+          unit_code: Box
+          product_code: SKU_4
+          conversion_status: quarantined
+          stock_unit_qty: null
+          applied_conversion_factor: null
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 5
+          sold_quantity: '4'
+          unit_code: Strip
+          product_code: SKU_5
+          conversion_status: unmapped
+          stock_unit_qty: null
+          applied_conversion_factor: null
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 6
+          sold_quantity: '5'
+          unit_code: Kali
+          product_code: SKU_6
+          conversion_status: unmapped
+          stock_unit_qty: null
+          applied_conversion_factor: null
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 7
+          sold_quantity: '6'
+          unit_code: Kali
+          product_code: SKU_7
+          conversion_status: approved
+          stock_unit_qty: '6'
+          applied_conversion_factor: '1'
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 8
+          sold_quantity: '-1.234567'
+          unit_code: Box
+          product_code: SKU_2
+          conversion_status: approved
+          stock_unit_qty: '-0.154320875'
+          applied_conversion_factor: '0.125'
+          mapping_version: uom_mapping_v2_2026-11-08
+        - sales_invoice_line_id: 9
+          sold_quantity: '0'
+          unit_code: Box
+          product_code: SKU_2
+          conversion_status: approved
+          stock_unit_qty: '0.000'
+          applied_conversion_factor: '0.125'
+          mapping_version: uom_mapping_v2_2026-11-08
+    overrides:
+      vars:
+        uom_mapping_version: uom_mapping_v2_2026-11-08

@@ -1,283 +1,357 @@
 version: 2
+
 models:
-- name: int_sales_lines_enriched
-  description: Recorded sales invoice lines with invoice, product, unit, cashier and product batch details.
-  config:
-    meta:
-      grain:
-      - sales_invoice_line_id
-      upstream_models:
-      - stg_sales_invoice_lines
-      - stg_sales_invoices
-      - stg_products
-      - stg_units
-      - stg_cashiers
-      - stg_product_batches
-      approved_decisions:
-      - I-01
-      - I-03
-      limitations:
-      - Recorded sales do not establish completed or net sales.
-      - Fees and percentages retain their uncertain line-recorded scope.
-      - Current catalog attributes do not replace transaction descriptions.
-      - No sales warehouse or historical arrival time is available.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns:
-        - dataset_name
-        - dataset_row_number
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('stg_sales_invoice_lines')
-        primary_key: sales_invoice_line_id
-  columns:
-  - name: sales_invoice_line_id
-    description: Identifier of an item entry on a sales invoice.
-    data_type: UInt32
+  - name: int_sales_lines_enriched
+    description: Recorded sales invoice lines with invoice, product, unit, cashier and product batch details.
+
+    config:
+      meta:
+        grain:
+          - sales_invoice_line_id
+        upstream_models:
+          - stg_sales_invoice_lines
+          - stg_sales_invoices
+          - stg_products
+          - stg_units
+          - stg_cashiers
+          - stg_product_batches
+        approved_decisions:
+          - I-01
+          - I-03
+        limitations:
+          - Recorded sales do not establish completed or net sales.
+          - Fees and percentages retain their uncertain line-recorded scope.
+          - Current catalog attributes do not replace transaction descriptions.
+          - No sales warehouse or historical arrival time is available.
     data_tests:
-    - not_null
-    - unique
-    - relationships:
-        arguments:
-          to: ref('stg_sales_invoice_lines')
-          field: sales_invoice_line_id
-  - name: dataset_name
-    description: Name of the dataset containing the transaction.
-    data_type: LowCardinality(String)
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - dataset_row_number
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('stg_sales_invoice_lines')
+            primary_key: sales_invoice_line_id
+
+    columns:
+      - name: sales_invoice_line_id
+        description: Identifier of an item entry on a sales invoice.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_sales_invoice_lines')
+                field: sales_invoice_line_id
+
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: dataset_row_number
+        description: >-
+          Original row number within the source dataset. Defines export order, with gaps permitted within an individual
+          product ledger.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: sales_invoice_id
+        description: Identifier of the sales invoice.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_sales_invoices')
+                field: sales_invoice_id
+
+      - name: sales_invoice_number
+        description: Number assigned to the sales invoice.
+        data_type: Nullable(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+      - name: product_code
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
+        data_type: Nullable(String)
+        data_tests:
+          - not_null
+
+      - name: unit_id
+        description: Identifier of the unit used for the quantity sold.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: unit_code
+        description: Unit in which the sold quantity was recorded.
+        data_type: LowCardinality(Nullable(String))
+        data_tests:
+          - not_null
+
+      - name: cashier_id
+        description: Identifier of the cashier who recorded the sale.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_cashiers')
+                field: cashier_id
+
+      - name: cashier_code
+        description: Code of the cashier recorded with the sale.
+        data_type: Nullable(String)
+        data_tests:
+          - not_null
+
+      - name: sold_at
+        description: Date and time the sale was recorded.
+        data_type: DateTime64(6)
+        data_tests:
+          - not_null
+
+      - name: sold_date
+        description: Calendar date of sold_at, used to group recorded sales by event date.
+        data_type: Date32
+        data_tests:
+          - not_null
+
+      - name: shift_label
+        description: Original designation of the sales shift.
+        data_type: Nullable(String)
+
+      - name: shift_date
+        description: Date recorded in the shift designation, which may differ from the sales event date.
+        data_type: Nullable(Date32)
+
+      - name: shift_period
+        description: Period of the day assigned to the sales shift.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: shift_cashier_code
+        description: Cashier code recorded in the sales shift designation.
+        data_type: Nullable(String)
+
+      - name: product_name
+        description: Product name recorded with the transaction.
+        data_type: String
+
+      - name: manufacturer_name
+        description: Manufacturer recorded with the product sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: drug_class_name
+        description: Drug classification recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_name
+        description: Product category recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: product_batch_id
+        description: Identifier of the product batch.
+        data_type: Nullable(UInt32)
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_product_batches')
+                field: product_batch_id
+
+      - name: product_batch_label
+        description: Original batch and expiration information recorded with the sale.
+        data_type: Nullable(String)
+
+      - name: product_batch_number
+        description: Batch number assigned to the product lot.
+        data_type: Nullable(String)
+
+      - name: expiration_date
+        description: Expiration date of the product batch.
+        data_type: Nullable(Date32)
+
+      - name: sold_quantity
+        description: Recorded signed sales quantity in unit_id, before any stock-unit conversion.
+        data_type: Decimal(18, 6)
+        data_tests:
+          - not_null
+
+      - name: unit_price
+        description: Recorded selling price per original sales unit; the monetary denomination follows the source
+          record.
+        data_type: Decimal(18, 6)
+
+      - name: price_tier_label
+        description: Selling price tier recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: price_tier_number
+        description: Number identifying the selling price tier.
+        data_type: Nullable(UInt8)
+
+      - name: discount_percentage
+        description: Discount percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: discount_amount
+        description: Discount amount recorded with the sales line, in the source monetary denomination.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: service_fee_amount
+        description: >-
+          Service fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: packaging_fee_amount
+        description: >-
+          Packaging fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: subtotal_amount
+        description: >-
+          Subtotal supplied with the sales line, in the source monetary denomination; preserved rather than recalculated.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: invoice_discount_percentage
+        description: >-
+          Invoice discount percentage recorded with this sales line, on a scale from 0 to 100; retained without
+          invoice-level allocation.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: promotional_discount_percentage
+        description: Promotion discount percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: tax_percentage
+        description: Tax percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: additional_fee_amount
+        description: >-
+          Additional fee recorded with this sales line, in the source monetary denomination; invoice allocation
+          is unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: total_amount
+        description: >-
+          Final amount supplied with the sales line, in the source monetary denomination; preserved rather than
+          recalculated.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: payment_method
+        description: Payment method recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: document_print_count
+        description: Number of times the sales document was printed.
+        data_type: Nullable(UInt16)
+
+      - name: membership_status
+        description: Membership status recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+  - name: int_sales_daily_observed
+    description: >-
+      Recorded sales quantities at product, observed date and original-unit grain, limited to combinations with
+      source sales lines.
+
+    config:
+      meta:
+        grain:
+          - product_id
+          - sold_date
+          - unit_id
+        upstream_models:
+          - int_sales_lines_enriched
+        approved_decisions:
+          - I-01
+          - I-03
+        limitations:
+          - Observed combinations only; missing days are not zero-filled.
+          - No unit conversion, location assignment, cancellation filtering or return netting.
+          - Quantities must not be added across different units.
+          - Event time does not establish historical data availability.
     data_tests:
-    - not_null
-  - name: dataset_row_number
-    description: Original record number within the transaction dataset.
-    data_type: UInt32
-    data_tests:
-    - not_null
-  - name: sales_invoice_id
-    description: Identifier of the sales invoice.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_sales_invoices')
-          field: sales_invoice_id
-  - name: sales_invoice_number
-    description: Number assigned to the sales invoice.
-    data_type: Nullable(String)
-    data_tests:
-    - not_null
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_products')
-          field: product_id
-  - name: product_code
-    description: Code used by the pharmacy to identify the product.
-    data_type: Nullable(String)
-    data_tests:
-    - not_null
-  - name: unit_id
-    description: Identifier of the unit used for the quantity sold.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_units')
-          field: unit_id
-  - name: unit_code
-    description: Unit in which the sold quantity was recorded.
-    data_type: LowCardinality(Nullable(String))
-    data_tests:
-    - not_null
-  - name: cashier_id
-    description: Identifier of the cashier who recorded the sale.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_cashiers')
-          field: cashier_id
-  - name: cashier_code
-    description: Code of the cashier recorded with the sale.
-    data_type: Nullable(String)
-    data_tests:
-    - not_null
-  - name: sold_at
-    description: Date and time the sale was recorded.
-    data_type: DateTime64(6)
-    data_tests:
-    - not_null
-  - name: sold_date
-    description: Calendar date on which the sale was recorded.
-    data_type: Date32
-    data_tests:
-    - not_null
-  - name: shift_label
-    description: Original designation of the sales shift.
-    data_type: Nullable(String)
-  - name: shift_date
-    description: Business date of the sales shift.
-    data_type: Nullable(Date32)
-  - name: shift_period
-    description: Period of the day assigned to the sales shift.
-    data_type: LowCardinality(Nullable(String))
-  - name: shift_cashier_code
-    description: Cashier code recorded in the sales shift designation.
-    data_type: Nullable(String)
-  - name: product_name
-    description: Product name recorded with the transaction.
-    data_type: String
-  - name: manufacturer_name
-    description: Manufacturer recorded with the product sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: drug_class_name
-    description: Drug classification recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: category_name
-    description: Product category recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: product_batch_id
-    description: Identifier of the product batch.
-    data_type: Nullable(UInt32)
-    data_tests:
-    - relationships:
-        arguments:
-          to: ref('stg_product_batches')
-          field: product_batch_id
-  - name: product_batch_label
-    description: Original batch and expiration information recorded with the sale.
-    data_type: Nullable(String)
-  - name: product_batch_number
-    description: Batch number assigned to the product lot.
-    data_type: Nullable(String)
-  - name: expiration_date
-    description: Expiration date of the product batch.
-    data_type: Nullable(Date32)
-  - name: sold_quantity
-    description: Quantity of the product sold.
-    data_type: Decimal(18, 6)
-    data_tests:
-    - not_null
-  - name: unit_price
-    description: Selling price per unit of the product.
-    data_type: Decimal(18, 6)
-  - name: price_tier_label
-    description: Selling price tier recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: price_tier_number
-    description: Number identifying the selling price tier.
-    data_type: Nullable(UInt8)
-  - name: discount_percentage
-    description: Discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: discount_amount
-    description: Discount amount recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: service_fee_amount
-    description: Service fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: packaging_fee_amount
-    description: Packaging fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: subtotal_amount
-    description: Subtotal recorded with the sales item before subsequent adjustments.
-    data_type: Nullable(Decimal(18, 6))
-  - name: invoice_discount_percentage
-    description: Invoice discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: promotional_discount_percentage
-    description: Promotional discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: tax_percentage
-    description: Tax percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: additional_fee_amount
-    description: Additional fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: total_amount
-    description: Final amount recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: payment_method
-    description: Payment method recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: document_print_count
-    description: Number of times the sales document was printed.
-    data_type: Nullable(UInt16)
-  - name: membership_status
-    description: Membership status recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-- name: int_sales_daily_observed
-  description: Daily recorded sales quantities for each product in each original selling unit.
-  config:
-    meta:
-      grain:
-      - product_id
-      - sold_date
-      - unit_id
-      upstream_models:
-      - int_sales_lines_enriched
-      approved_decisions:
-      - I-01
-      - I-03
-      limitations:
-      - Observed combinations only; missing days are not zero-filled.
-      - No unit conversion, location assignment, cancellation filtering or return netting.
-      - Quantities must not be added across different units.
-      - Event time does not establish historical data availability.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns:
-        - product_id
-        - sold_date
-        - unit_id
-  columns:
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_products')
-          field: product_id
-  - name: sold_date
-    description: Calendar date on which sales were recorded.
-    data_type: Date32
-    data_tests:
-    - not_null
-  - name: unit_id
-    description: Identifier of the unit used for the sold quantity.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg_units')
-          field: unit_id
-  - name: recorded_sold_quantity
-    description: Sum of recorded sold quantities for the product, date and unit.
-    data_type: Decimal(38, 6)
-    data_tests:
-    - not_null
-  - name: sales_line_count
-    description: Number of recorded sales invoice lines contributing to the observation.
-    data_type: UInt64
-    data_tests:
-    - not_null
-  - name: first_sold_at
-    description: Earliest recorded sale time contributing to the observation.
-    data_type: DateTime64(6)
-    data_tests:
-    - not_null
-  - name: last_sold_at
-    description: Latest recorded sale time contributing to the observation.
-    data_type: DateTime64(6)
-    data_tests:
-    - not_null
+      - unique_grain:
+          arguments:
+
+            columns:
+              - product_id
+              - sold_date
+              - unit_id
+
+    columns:
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+      - name: sold_date
+        description: Calendar date of sold_at, used to group recorded sales by event date.
+        data_type: Date32
+        data_tests:
+          - not_null
+
+      - name: unit_id
+        description: Identifier of the unit used for the sold quantity.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_units')
+                field: unit_id
+
+      - name: recorded_sold_quantity
+        description: >-
+          Sum of signed sold_quantity for the product, event date and original unit, without stock-return adjustment.
+        data_type: Decimal(38, 6)
+        data_tests:
+          - not_null
+
+      - name: sales_line_count
+        description: Number of recorded sales invoice lines contributing to the observation.
+        data_type: UInt64
+        data_tests:
+          - not_null
+
+      - name: first_sold_at
+        description: Earliest recorded sale time contributing to the observation.
+        data_type: DateTime64(6)
+        data_tests:
+          - not_null
+
+      - name: last_sold_at
+        description: Latest recorded sale time contributing to the observation.
+        data_type: DateTime64(6)
+        data_tests:
+          - not_null

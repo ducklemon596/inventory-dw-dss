@@ -1,13 +1,14 @@
-with cleaned as (
-    select
-        {{ stg_text('category_id', []) }} as category_id,
+-- Categories remain independent of drug classes; no hierarchy is inferred.
+WITH cleaned AS (
+    SELECT
+        {{ stg_text('category_id', []) }} AS category_id,
 
-        {{ stg_text('category_name', ['-', 'null', 'none', 'n/a']) }} as category_name
-    from {{ source('raw', 'category') }}
+        {{ stg_text('category_name', ['-', 'null', 'none', 'n/a']) }} AS category_name
+    FROM {{ source('raw', 'category') }}
 )
 
-select
-    {{ stg_integer('category_id', 'UInt32', positive=true) }} as category_id,
+SELECT
+    {{ stg_integer('category_id', 'UInt32', positive=true) }} AS category_id,
 
-    CAST(category_name AS LowCardinality(String)) as category_name
-from cleaned
+    CAST(category_name AS LowCardinality(String)) AS category_name
+FROM cleaned

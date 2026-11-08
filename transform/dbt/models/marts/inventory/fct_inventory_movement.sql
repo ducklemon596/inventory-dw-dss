@@ -1,9 +1,12 @@
 -- FACT: One recorded inventory movement; quantities and lineage remain unchanged
-{{ config(materialized='table', engine='MergeTree()',
-          order_by='(dataset_name, product_id, warehouse_id, movement_date, dataset_row_number)') }}
+{{ config(
+    materialized='table',
+    engine='MergeTree()',
+    order_by='(dataset_name, product_id, warehouse_id, movement_date, dataset_row_number)'
+) }}
 
 -- Discontinuity deltas remain diagnostic; recorded_delta_qty is the only flow effect.
-select
+SELECT
     inventory_movement_id,
     dataset_name,
     dataset_row_number,
@@ -40,4 +43,4 @@ select
     has_negative_opening_stock,
     has_negative_closing_stock,
     is_unknown_movement
-from {{ ref('int_inventory_segments') }}
+FROM {{ ref('int_inventory_segments') }}

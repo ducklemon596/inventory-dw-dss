@@ -1,289 +1,428 @@
 version: 2
+
 models:
-- name: int_product_stock_units
-  description: Products with stock units verified across their recorded inventory observations.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns:
-        - dataset_name
-        - product_id
-  columns:
-  - name: dataset_name
-    description: Export scope of the recorded product observations.
-    data_type: LowCardinality(String)
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-  - name: product_code
-    description: Original POS product code.
-    data_type: Nullable(String)
-  - name: stock_unit_id
-    description: Unit supported by the recorded stock observations.
-    data_type: Nullable(UInt32)
-  - name: stock_unit_code
-    description: Recorded stock unit label.
-    data_type: LowCardinality(Nullable(String))
-  - name: recorded_stock_unit_count
-    description: Number of distinct stock units observed for the product.
-    data_type: UInt64
-  - name: inconsistent_unit_movement_count
-    description: Number of movements whose opening, received, issued and closing units disagree.
-    data_type: UInt64
-- name: int_sales_quantity_converted
-  description: Recorded sales lines with governed stock-unit quantities and conversion evidence.
-  config:
-    meta:
-      grain:
-      - sales_invoice_line_id
-      limitations:
-      - Recorded quantities do not establish net sales or sales warehouse.
-      - Unapproved and unverified quantities remain unconverted.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns:
-        - sales_invoice_line_id
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('int_sales_lines_enriched')
-        primary_key: sales_invoice_line_id
-  columns:
-  - name: sales_invoice_line_id
-    description: Identifier of an item entry on a sales invoice.
-    data_type: UInt32
+  - name: int_product_stock_units
+    description: >-
+      One stock-unit evidence result per dataset and product, combining all recorded warehouses and quantity-unit
+      roles.
     data_tests:
-    - not_null
-  - name: dataset_name
-    description: Name of the dataset containing the transaction.
-    data_type: LowCardinality(String)
-  - name: dataset_row_number
-    description: Original record number within the transaction dataset.
-    data_type: UInt32
-  - name: sales_invoice_id
-    description: Identifier of the sales invoice.
-    data_type: UInt32
-  - name: sales_invoice_number
-    description: Number assigned to the sales invoice.
-    data_type: Nullable(String)
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-  - name: product_code
-    description: Code used by the pharmacy to identify the product.
-    data_type: Nullable(String)
-  - name: unit_id
-    description: Identifier of the unit used for the quantity sold.
-    data_type: UInt32
-  - name: unit_code
-    description: Unit in which the sold quantity was recorded.
-    data_type: LowCardinality(Nullable(String))
-  - name: cashier_id
-    description: Identifier of the cashier who recorded the sale.
-    data_type: UInt32
-  - name: cashier_code
-    description: Code of the cashier recorded with the sale.
-    data_type: Nullable(String)
-  - name: sold_at
-    description: Date and time the sale was recorded.
-    data_type: DateTime64(6)
-  - name: sold_date
-    description: Calendar date on which the sale was recorded.
-    data_type: Date32
-  - name: shift_label
-    description: Original designation of the sales shift.
-    data_type: Nullable(String)
-  - name: shift_date
-    description: Business date of the sales shift.
-    data_type: Nullable(Date32)
-  - name: shift_period
-    description: Period of the day assigned to the sales shift.
-    data_type: LowCardinality(Nullable(String))
-  - name: shift_cashier_code
-    description: Cashier code recorded in the sales shift designation.
-    data_type: Nullable(String)
-  - name: product_name
-    description: Product name recorded with the transaction.
-    data_type: String
-  - name: manufacturer_name
-    description: Manufacturer recorded with the product sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: drug_class_name
-    description: Drug classification recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: category_name
-    description: Product category recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: product_batch_id
-    description: Identifier of the product batch.
-    data_type: Nullable(UInt32)
-  - name: product_batch_label
-    description: Original batch and expiration information recorded with the sale.
-    data_type: Nullable(String)
-  - name: product_batch_number
-    description: Batch number assigned to the product lot.
-    data_type: Nullable(String)
-  - name: expiration_date
-    description: Expiration date of the product batch.
-    data_type: Nullable(Date32)
-  - name: sold_quantity
-    description: Quantity of the product sold.
-    data_type: Decimal(18, 6)
-  - name: unit_price
-    description: Selling price per unit of the product.
-    data_type: Decimal(18, 6)
-  - name: price_tier_label
-    description: Selling price tier recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: price_tier_number
-    description: Number identifying the selling price tier.
-    data_type: Nullable(UInt8)
-  - name: discount_percentage
-    description: Discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: discount_amount
-    description: Discount amount recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: service_fee_amount
-    description: Service fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: packaging_fee_amount
-    description: Packaging fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: subtotal_amount
-    description: Subtotal recorded with the sales item before subsequent adjustments.
-    data_type: Nullable(Decimal(18, 6))
-  - name: invoice_discount_percentage
-    description: Invoice discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: promotional_discount_percentage
-    description: Promotional discount percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: tax_percentage
-    description: Tax percentage recorded with the sales item.
-    data_type: Nullable(Decimal(9, 4))
-  - name: additional_fee_amount
-    description: Additional fee recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: total_amount
-    description: Final amount recorded with the sales item.
-    data_type: Nullable(Decimal(18, 6))
-  - name: payment_method
-    description: Payment method recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: document_print_count
-    description: Number of times the sales document was printed.
-    data_type: Nullable(UInt16)
-  - name: membership_status
-    description: Membership status recorded with the sale.
-    data_type: LowCardinality(Nullable(String))
-  - name: verified_stock_unit_id
-    description: "Unit supported by the product\u2019s recorded inventory observations."
-    data_type: Nullable(UInt32)
-  - name: verified_stock_unit_code
-    description: "Stock unit label supported by the product\u2019s recorded inventory observations."
-    data_type: LowCardinality(Nullable(String))
-  - name: mapping_tier
-    description: Evidence tier of the matched conversion decision.
-    data_type: LowCardinality(Nullable(String))
-  - name: mapping_approval_status
-    description: Approval state of the matched conversion decision.
-    data_type: LowCardinality(Nullable(String))
-  - name: approved_conversion_factor
-    description: Approved number of stock units per recorded sales unit for the matched pair.
-    data_type: Nullable(Decimal(18, 6))
-  - name: mapping_supporting_invoice_count
-    description: Number of invoices supporting the matched conversion decision.
-    data_type: Nullable(UInt32)
-  - name: mapping_share_at_mode
-    description: Share of supporting observations at the most frequent ratio for the matched pair.
-    data_type: Nullable(Decimal(38, 18))
-  - name: mapping_price_ratio
-    description: Observed price ratio supporting the matched conversion decision.
-    data_type: Nullable(Decimal(38, 18))
-  - name: mapping_price_check_within_15pct
-    description: Whether the observed price ratio agrees within fifteen percent for the matched pair.
-    data_type: Nullable(Bool)
-  - name: mapping_evidence_source
-    description: Evidence supporting the matched conversion decision.
-    data_type: Nullable(String)
-  - name: mapping_stock_unit_code
-    description: Target stock unit specified in the matched conversion decision.
-    data_type: Nullable(String)
-  - name: mapping_version
-    description: Published conversion version selected for this sales observation.
-    data_type: String
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+
+    columns:
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+      - name: product_code
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
+        data_type: Nullable(String)
+
+      - name: stock_unit_id
+        description: >-
+          Identifier of the stock unit supported by all four quantity-unit roles across the product dataset; absent
+          when evidence disagrees or is unavailable.
+        data_type: Nullable(UInt32)
+
+      - name: stock_unit_code
+        description: >-
+          Label of the product stock unit supported across recorded warehouses; absent when a single unit cannot
+          be established.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: recorded_stock_unit_count
+        description: >-
+          Number of distinct closing-stock units observed for this product across warehouses within the dataset.
+        data_type: UInt64
+
+      - name: inconsistent_unit_movement_count
+        description: Number of movements where an opening, inbound or outbound unit differs from the closing-stock
+          unit.
+        data_type: UInt64
+
+  - name: int_sales_quantity_converted
+    description: Recorded sales lines with governed stock-unit quantities and conversion evidence.
+
+    config:
+      meta:
+        grain:
+          - sales_invoice_line_id
+        limitations:
+          - Recorded quantities do not establish net sales or sales warehouse.
+          - Unapproved and unverified quantities remain unconverted.
     data_tests:
-    - not_null
-  - name: conversion_status
-    description: Whether the quantity is identical in stock units, approved for conversion, candidate, quarantined
-      or unmapped.
-    data_type: String
+      - unique_grain:
+          arguments:
+
+            columns:
+              - sales_invoice_line_id
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('int_sales_lines_enriched')
+            primary_key: sales_invoice_line_id
+
+    columns:
+      - name: sales_invoice_line_id
+        description: Identifier of an item entry on a sales invoice.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+
+      - name: dataset_row_number
+        description: >-
+          Original row number within the source dataset. Defines export order, with gaps permitted within an individual
+          product ledger.
+        data_type: UInt32
+
+      - name: sales_invoice_id
+        description: Identifier of the sales invoice.
+        data_type: UInt32
+
+      - name: sales_invoice_number
+        description: Number assigned to the sales invoice.
+        data_type: Nullable(String)
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+      - name: product_code
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
+        data_type: Nullable(String)
+
+      - name: unit_id
+        description: Identifier of the unit used for the quantity sold.
+        data_type: UInt32
+
+      - name: unit_code
+        description: Unit in which the sold quantity was recorded.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: cashier_id
+        description: Identifier of the cashier who recorded the sale.
+        data_type: UInt32
+
+      - name: cashier_code
+        description: Code of the cashier recorded with the sale.
+        data_type: Nullable(String)
+
+      - name: sold_at
+        description: Date and time the sale was recorded.
+        data_type: DateTime64(6)
+
+      - name: sold_date
+        description: Calendar date of sold_at, used to group recorded sales by event date.
+        data_type: Date32
+
+      - name: shift_label
+        description: Original designation of the sales shift.
+        data_type: Nullable(String)
+
+      - name: shift_date
+        description: Date recorded in the shift designation, which may differ from the sales event date.
+        data_type: Nullable(Date32)
+
+      - name: shift_period
+        description: Period of the day assigned to the sales shift.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: shift_cashier_code
+        description: Cashier code recorded in the sales shift designation.
+        data_type: Nullable(String)
+
+      - name: product_name
+        description: Product name recorded with the transaction.
+        data_type: String
+
+      - name: manufacturer_name
+        description: Manufacturer recorded with the product sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: drug_class_name
+        description: Drug classification recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_name
+        description: Product category recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: product_batch_id
+        description: Identifier of the product batch.
+        data_type: Nullable(UInt32)
+
+      - name: product_batch_label
+        description: Original batch and expiration information recorded with the sale.
+        data_type: Nullable(String)
+
+      - name: product_batch_number
+        description: Batch number assigned to the product lot.
+        data_type: Nullable(String)
+
+      - name: expiration_date
+        description: Expiration date of the product batch.
+        data_type: Nullable(Date32)
+
+      - name: sold_quantity
+        description: Recorded signed sales quantity in unit_id, before any stock-unit conversion.
+        data_type: Decimal(18, 6)
+
+      - name: unit_price
+        description: Recorded selling price per original sales unit; the monetary denomination follows the source
+          record.
+        data_type: Decimal(18, 6)
+
+      - name: price_tier_label
+        description: Selling price tier recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: price_tier_number
+        description: Number identifying the selling price tier.
+        data_type: Nullable(UInt8)
+
+      - name: discount_percentage
+        description: Discount percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: discount_amount
+        description: Discount amount recorded with the sales line, in the source monetary denomination.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: service_fee_amount
+        description: >-
+          Service fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: packaging_fee_amount
+        description: >-
+          Packaging fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: subtotal_amount
+        description: >-
+          Subtotal supplied with the sales line, in the source monetary denomination; preserved rather than recalculated.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: invoice_discount_percentage
+        description: >-
+          Invoice discount percentage recorded with this sales line, on a scale from 0 to 100; retained without
+          invoice-level allocation.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: promotional_discount_percentage
+        description: Promotion discount percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: tax_percentage
+        description: Tax percentage recorded with the sales line, on a scale from 0 to 100.
+        data_type: Nullable(Decimal(9, 4))
+
+      - name: additional_fee_amount
+        description: >-
+          Additional fee recorded with this sales line, in the source monetary denomination; invoice allocation
+          is unverified.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: total_amount
+        description: >-
+          Final amount supplied with the sales line, in the source monetary denomination; preserved rather than
+          recalculated.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: payment_method
+        description: Payment method recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: document_print_count
+        description: Number of times the sales document was printed.
+        data_type: Nullable(UInt16)
+
+      - name: membership_status
+        description: Membership status recorded with the sale.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: verified_stock_unit_id
+        description: >-
+          Identifier of the stock unit supported by all four quantity-unit roles across the product dataset; absent
+          when evidence disagrees or is unavailable.
+        data_type: Nullable(UInt32)
+
+      - name: verified_stock_unit_code
+        description: >-
+          Label of the product stock unit supported across recorded warehouses; absent when a single unit cannot
+          be established.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: mapping_tier
+        description: Evidence tier of the matched conversion decision.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: mapping_approval_status
+        description: Approval state of the matched conversion decision.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: approved_conversion_factor
+        description: Approved number of target stock units per original sales unit for the matched product and unit
+          pair.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: mapping_supporting_invoice_count
+        description: Number of invoices supporting the matched conversion decision.
+        data_type: Nullable(UInt32)
+
+      - name: mapping_share_at_mode
+        description: >-
+          Share of supporting observations at the most frequent ratio for the matched unit pair, on a scale from
+          0 to 1.
+        data_type: Nullable(Decimal(38, 18))
+
+      - name: mapping_price_ratio
+        description: Price ratio supplied as evidence for the matched unit pair; it does not itself authorize conversion.
+        data_type: Nullable(Decimal(38, 18))
+
+      - name: mapping_price_check_within_15pct
+        description: Whether the observed price ratio agrees within fifteen percent for the matched pair.
+        data_type: Nullable(Bool)
+
+      - name: mapping_evidence_source
+        description: Evidence supporting the matched conversion decision.
+        data_type: Nullable(String)
+
+      - name: mapping_stock_unit_code
+        description: Target stock unit specified in the matched conversion decision.
+        data_type: Nullable(String)
+
+      - name: mapping_version
+        description: >-
+          Published conversion decision version selected for this observation; one version applies to each sales
+          line.
+        data_type: String
+        data_tests:
+          - not_null
+
+      - name: conversion_status
+        description: >-
+          Conversion outcome: identity for equal verified units, approved for an accepted compatible factor, otherwise
+          candidate, quarantined or unmapped.
+        data_type: String
+        data_tests:
+          - not_null
+
+      - name: applied_conversion_factor
+        description: >-
+          Factor actually applied: one for verified identity or the approved stock-units-per-sales-unit factor;
+          absent for unresolved conversions.
+        data_type: Nullable(Decimal(18, 6))
+
+      - name: stock_unit_qty
+        description: >-
+          Signed sold_quantity expressed in the verified stock unit using identity or approved conversion; unresolved
+          quantities remain absent.
+        data_type: Nullable(Decimal(38, 12))
+
+  - name: int_sales_uom_coverage
+    description: >-
+      Line counts and original-unit quantity coverage per dataset, product, sales unit and selected mapping version.
     data_tests:
-    - not_null
-  - name: applied_conversion_factor
-    description: Number of stock units per sales unit applied to the recorded quantity.
-    data_type: Nullable(Decimal(18, 6))
-  - name: stock_unit_qty
-    description: Recorded sales quantity expressed in the verified stock unit when supported.
-    data_type: Nullable(Decimal(38, 12))
-- name: int_sales_uom_coverage
-  description: Conversion coverage for each product and its original recorded sales unit.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns:
-        - dataset_name
-        - product_id
-        - unit_id
-        - mapping_version
-  columns:
-  - name: dataset_name
-    description: Export scope of the recorded sales.
-    data_type: LowCardinality(String)
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-  - name: product_code
-    description: Original POS product code.
-    data_type: Nullable(String)
-  - name: unit_id
-    description: Identifier of the original sales unit.
-    data_type: UInt32
-  - name: unit_code
-    description: Original recorded sales unit.
-    data_type: LowCardinality(Nullable(String))
-  - name: mapping_version
-    description: Published conversion version used to measure coverage.
-    data_type: String
-  - name: verified_stock_unit_code
-    description: Verified target stock unit when known.
-    data_type: Nullable(String)
-  - name: sales_line_count
-    description: Recorded sales lines for this product and original unit.
-    data_type: UInt64
-  - name: identity_line_count
-    description: Sales lines already in verified stock units for this product and original unit.
-    data_type: UInt64
-  - name: approved_line_count
-    description: Sales lines with approved conversions for this product and original unit.
-    data_type: UInt64
-  - name: candidate_line_count
-    description: Sales lines with candidate conversions for this product and original unit.
-    data_type: UInt64
-  - name: quarantined_line_count
-    description: Sales lines with quarantined conversions for this product and original unit.
-    data_type: UInt64
-  - name: unmapped_line_count
-    description: Sales lines without a supported conversion for this product and original unit.
-    data_type: UInt64
-  - name: absolute_sales_quantity
-    description: Absolute recorded sales quantity for this product in its original sales unit.
-    data_type: Decimal(38, 6)
-  - name: covered_absolute_sales_quantity
-    description: Absolute sales quantity with identity or approved conversion for this product in its original sales
-      unit.
-    data_type: Decimal(38, 6)
-  - name: unresolved_absolute_sales_quantity
-    description: Absolute sales quantity without supported conversion for this product in its original sales unit.
-    data_type: Decimal(38, 6)
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - unit_id
+              - mapping_version
+
+    columns:
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+
+      - name: product_code
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
+        data_type: Nullable(String)
+
+      - name: unit_id
+        description: Identifier of the original sales unit.
+        data_type: UInt32
+
+      - name: unit_code
+        description: Original recorded sales unit.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: mapping_version
+        description: >-
+          Published conversion decision version selected for this observation; one version applies to each sales
+          line.
+        data_type: String
+
+      - name: verified_stock_unit_code
+        description: >-
+          Label of the product stock unit supported across recorded warehouses; absent when a single unit cannot
+          be established.
+        data_type: Nullable(String)
+
+      - name: sales_line_count
+        description: Recorded sales lines for this product and original unit.
+        data_type: UInt64
+
+      - name: identity_line_count
+        description: Sales lines already in verified stock units for this product and original unit.
+        data_type: UInt64
+
+      - name: approved_line_count
+        description: Sales lines with approved conversions for this product and original unit.
+        data_type: UInt64
+
+      - name: candidate_line_count
+        description: Sales lines with candidate conversions for this product and original unit.
+        data_type: UInt64
+
+      - name: quarantined_line_count
+        description: Sales lines with quarantined conversions for this product and original unit.
+        data_type: UInt64
+
+      - name: unmapped_line_count
+        description: Sales lines without a supported conversion for this product and original unit.
+        data_type: UInt64
+
+      - name: absolute_sales_quantity
+        description: >-
+          Sum of absolute sold_quantity values for this product and original sales unit, not the absolute value
+          of a net sum.
+        data_type: Decimal(38, 6)
+
+      - name: covered_absolute_sales_quantity
+        description: >-
+          Sum of absolute original-unit quantities on identity or approved lines; expressed in the original sales
+          unit.
+        data_type: Decimal(38, 6)
+
+      - name: unresolved_absolute_sales_quantity
+        description: >-
+          Sum of absolute original-unit quantities on candidate, quarantined or unmapped lines; expressed in the
+          original sales unit.
+        data_type: Decimal(38, 6)

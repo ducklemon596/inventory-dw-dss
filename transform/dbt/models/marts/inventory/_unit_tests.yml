@@ -1,183 +1,184 @@
 version: 2
+
 unit_tests:
-- name: daily_inventory_selects_complete_last_sequence_and_flags_ties
-  model: fct_inventory_daily_observed
-  given:
-  - input: ref('fct_inventory_movement')
-    rows:
-    - inventory_movement_id: 90
-      dataset_name: fixture
-      dataset_row_number: 10
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '6'
-      received_quantity: '0'
-      issued_quantity: '1'
-      closing_stock_quantity: '5'
-      recorded_delta_qty: '-1'
-      closing_stock_unit_id: 1
-      segment_id: segment_1
-      is_discontinuity: 0
-    - inventory_movement_id: 80
-      dataset_name: fixture
-      dataset_row_number: 20
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '5'
-      received_quantity: '0'
-      issued_quantity: '1'
-      closing_stock_quantity: '4'
-      recorded_delta_qty: '-1'
-      closing_stock_unit_id: 1
-      segment_id: segment_2
-      is_discontinuity: 1
-    - inventory_movement_id: 70
-      dataset_name: fixture
-      dataset_row_number: 30
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 09:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '3'
-      received_quantity: '0'
-      issued_quantity: '4'
-      closing_stock_quantity: '-1'
-      recorded_delta_qty: '-4'
-      closing_stock_unit_id: 1
-      segment_id: segment_2
-      is_discontinuity: 0
-    - inventory_movement_id: 60
-      dataset_name: fixture
-      dataset_row_number: 40
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-03-02 10:00:00.000000'
-      movement_date: '2024-03-02'
-      opening_stock_quantity: '2'
-      received_quantity: '0'
-      issued_quantity: '0'
-      closing_stock_quantity: '2'
-      recorded_delta_qty: '0'
-      closing_stock_unit_id: 1
-      segment_id: segment_2
-      is_discontinuity: 0
-    - inventory_movement_id: 50
-      dataset_name: fixture
-      dataset_row_number: 50
-      product_id: 1
-      warehouse_id: 2
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '9'
-      received_quantity: '0'
-      issued_quantity: '0'
-      closing_stock_quantity: '9'
-      recorded_delta_qty: '0'
-      closing_stock_unit_id: 1
-      segment_id: warehouse2
-      is_discontinuity: 0
-    - inventory_movement_id: 40
-      dataset_name: other_export
-      dataset_row_number: 60
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '8'
-      received_quantity: '0'
-      issued_quantity: '0'
-      closing_stock_quantity: '8'
-      recorded_delta_qty: '0'
-      closing_stock_unit_id: 1
-      segment_id: other
-      is_discontinuity: 0
-  expect:
-    rows:
-    - dataset_name: fixture
-      product_id: 1
-      warehouse_id: 1
-      observation_date: '2024-02-29'
-      last_inventory_movement_id: 70
-      last_source_sequence: 30
-      last_movement_at: '2024-02-29 09:00:00.000000'
-      observed_closing_quantity: '-1'
-      stock_unit_id: 1
-      last_segment_id: segment_2
-      first_source_sequence: 10
-      recorded_received_quantity: '0'
-      recorded_issued_quantity: '6'
-      recorded_delta_qty: '-6'
-      movement_count: 3
-      discontinuity_count: 1
-      segment_count: 2
-      stock_unit_count: 1
-      has_discontinuity: 1
-      has_negative_closing_stock: 1
-      has_ambiguous_latest_timestamp: 1
-    - dataset_name: fixture
-      product_id: 1
-      warehouse_id: 1
-      observation_date: '2024-03-02'
-      last_inventory_movement_id: 60
-      last_source_sequence: 40
-      last_movement_at: '2024-03-02 10:00:00.000000'
-      observed_closing_quantity: '2'
-      stock_unit_id: 1
-      last_segment_id: segment_2
-      first_source_sequence: 40
-      recorded_received_quantity: '0'
-      recorded_issued_quantity: '0'
-      recorded_delta_qty: '0'
-      movement_count: 1
-      discontinuity_count: 0
-      segment_count: 1
-      stock_unit_count: 1
-      has_discontinuity: 0
-      has_negative_closing_stock: 0
-      has_ambiguous_latest_timestamp: 0
-    - dataset_name: fixture
-      product_id: 1
-      warehouse_id: 2
-      observation_date: '2024-02-29'
-      last_inventory_movement_id: 50
-      last_source_sequence: 50
-      last_movement_at: '2024-02-29 10:00:00.000000'
-      observed_closing_quantity: '9'
-      stock_unit_id: 1
-      last_segment_id: warehouse2
-      first_source_sequence: 50
-      recorded_received_quantity: '0'
-      recorded_issued_quantity: '0'
-      recorded_delta_qty: '0'
-      movement_count: 1
-      discontinuity_count: 0
-      segment_count: 1
-      stock_unit_count: 1
-      has_discontinuity: 0
-      has_negative_closing_stock: 0
-      has_ambiguous_latest_timestamp: 0
-    - dataset_name: other_export
-      product_id: 1
-      warehouse_id: 1
-      observation_date: '2024-02-29'
-      last_inventory_movement_id: 40
-      last_source_sequence: 60
-      last_movement_at: '2024-02-29 10:00:00.000000'
-      observed_closing_quantity: '8'
-      stock_unit_id: 1
-      last_segment_id: other
-      first_source_sequence: 60
-      recorded_received_quantity: '0'
-      recorded_issued_quantity: '0'
-      recorded_delta_qty: '0'
-      movement_count: 1
-      discontinuity_count: 0
-      segment_count: 1
-      stock_unit_count: 1
-      has_discontinuity: 0
-      has_negative_closing_stock: 0
-      has_ambiguous_latest_timestamp: 0
+  - name: daily_inventory_selects_complete_last_sequence_and_flags_ties
+    model: fct_inventory_daily_observed
+    given:
+      - input: ref('fct_inventory_movement')
+        rows:
+          - inventory_movement_id: 90
+            dataset_name: fixture
+            dataset_row_number: 10
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '6'
+            received_quantity: '0'
+            issued_quantity: '1'
+            closing_stock_quantity: '5'
+            recorded_delta_qty: '-1'
+            closing_stock_unit_id: 1
+            segment_id: segment_1
+            is_discontinuity: 0
+          - inventory_movement_id: 80
+            dataset_name: fixture
+            dataset_row_number: 20
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '5'
+            received_quantity: '0'
+            issued_quantity: '1'
+            closing_stock_quantity: '4'
+            recorded_delta_qty: '-1'
+            closing_stock_unit_id: 1
+            segment_id: segment_2
+            is_discontinuity: 1
+          - inventory_movement_id: 70
+            dataset_name: fixture
+            dataset_row_number: 30
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 09:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '3'
+            received_quantity: '0'
+            issued_quantity: '4'
+            closing_stock_quantity: '-1'
+            recorded_delta_qty: '-4'
+            closing_stock_unit_id: 1
+            segment_id: segment_2
+            is_discontinuity: 0
+          - inventory_movement_id: 60
+            dataset_name: fixture
+            dataset_row_number: 40
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-03-02 10:00:00.000000'
+            movement_date: '2024-03-02'
+            opening_stock_quantity: '2'
+            received_quantity: '0'
+            issued_quantity: '0'
+            closing_stock_quantity: '2'
+            recorded_delta_qty: '0'
+            closing_stock_unit_id: 1
+            segment_id: segment_2
+            is_discontinuity: 0
+          - inventory_movement_id: 50
+            dataset_name: fixture
+            dataset_row_number: 50
+            product_id: 1
+            warehouse_id: 2
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '9'
+            received_quantity: '0'
+            issued_quantity: '0'
+            closing_stock_quantity: '9'
+            recorded_delta_qty: '0'
+            closing_stock_unit_id: 1
+            segment_id: warehouse2
+            is_discontinuity: 0
+          - inventory_movement_id: 40
+            dataset_name: other_export
+            dataset_row_number: 60
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '8'
+            received_quantity: '0'
+            issued_quantity: '0'
+            closing_stock_quantity: '8'
+            recorded_delta_qty: '0'
+            closing_stock_unit_id: 1
+            segment_id: other
+            is_discontinuity: 0
+    expect:
+      rows:
+        - dataset_name: fixture
+          product_id: 1
+          warehouse_id: 1
+          observation_date: '2024-02-29'
+          last_inventory_movement_id: 70
+          last_source_sequence: 30
+          last_movement_at: '2024-02-29 09:00:00.000000'
+          observed_closing_quantity: '-1'
+          stock_unit_id: 1
+          last_segment_id: segment_2
+          first_source_sequence: 10
+          recorded_received_quantity: '0'
+          recorded_issued_quantity: '6'
+          recorded_delta_qty: '-6'
+          movement_count: 3
+          discontinuity_count: 1
+          segment_count: 2
+          stock_unit_count: 1
+          has_discontinuity: 1
+          has_negative_closing_stock: 1
+          has_ambiguous_latest_timestamp: 1
+        - dataset_name: fixture
+          product_id: 1
+          warehouse_id: 1
+          observation_date: '2024-03-02'
+          last_inventory_movement_id: 60
+          last_source_sequence: 40
+          last_movement_at: '2024-03-02 10:00:00.000000'
+          observed_closing_quantity: '2'
+          stock_unit_id: 1
+          last_segment_id: segment_2
+          first_source_sequence: 40
+          recorded_received_quantity: '0'
+          recorded_issued_quantity: '0'
+          recorded_delta_qty: '0'
+          movement_count: 1
+          discontinuity_count: 0
+          segment_count: 1
+          stock_unit_count: 1
+          has_discontinuity: 0
+          has_negative_closing_stock: 0
+          has_ambiguous_latest_timestamp: 0
+        - dataset_name: fixture
+          product_id: 1
+          warehouse_id: 2
+          observation_date: '2024-02-29'
+          last_inventory_movement_id: 50
+          last_source_sequence: 50
+          last_movement_at: '2024-02-29 10:00:00.000000'
+          observed_closing_quantity: '9'
+          stock_unit_id: 1
+          last_segment_id: warehouse2
+          first_source_sequence: 50
+          recorded_received_quantity: '0'
+          recorded_issued_quantity: '0'
+          recorded_delta_qty: '0'
+          movement_count: 1
+          discontinuity_count: 0
+          segment_count: 1
+          stock_unit_count: 1
+          has_discontinuity: 0
+          has_negative_closing_stock: 0
+          has_ambiguous_latest_timestamp: 0
+        - dataset_name: other_export
+          product_id: 1
+          warehouse_id: 1
+          observation_date: '2024-02-29'
+          last_inventory_movement_id: 40
+          last_source_sequence: 60
+          last_movement_at: '2024-02-29 10:00:00.000000'
+          observed_closing_quantity: '8'
+          stock_unit_id: 1
+          last_segment_id: other
+          first_source_sequence: 60
+          recorded_received_quantity: '0'
+          recorded_issued_quantity: '0'
+          recorded_delta_qty: '0'
+          movement_count: 1
+          discontinuity_count: 0
+          segment_count: 1
+          stock_unit_count: 1
+          has_discontinuity: 0
+          has_negative_closing_stock: 0
+          has_ambiguous_latest_timestamp: 0

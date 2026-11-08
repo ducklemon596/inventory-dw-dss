@@ -1,304 +1,308 @@
 version: 2
+
 unit_tests:
-- name: inventory_keeps_unknown_returns_negatives_and_actual_flow_direction
-  description: Recorded receipts and issues determine quantity changes while unknown classifications and
-    negative balances remain intact.
-  model: int_inventory_movements_enriched
-  given:
-  - input: ref('stg_inventory_movements')
-    rows:
-    - inventory_movement_id: 1
-      dataset_name: fixture
-      dataset_row_number: 21
-      inventory_document_id: 1
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.123456'
-      transaction_type: UNKNOWN
-      transaction_description: Unresolved description
-      opening_stock_quantity: '-1.000001'
-      received_quantity: '0.000000'
-      issued_quantity: '0.000002'
-      closing_stock_quantity: '-1.000003'
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 2
-      dataset_name: fixture
-      dataset_row_number: 22
-      inventory_document_id: 1
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 11:00:00.000000'
-      transaction_type: RETURN
-      opening_stock_quantity: '10.000000'
-      received_quantity: '2.123456'
-      issued_quantity: '0.000000'
-      closing_stock_quantity: '12.123456'
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 3
-      dataset_name: fixture
-      dataset_row_number: 23
-      inventory_document_id: 1
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 12:00:00.000000'
-      transaction_type: RETURN
-      opening_stock_quantity: '3.000000'
-      received_quantity: '0.000000'
-      issued_quantity: '1.000000'
-      closing_stock_quantity: '2.000000'
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 4
-      dataset_name: fixture
-      dataset_row_number: 24
-      inventory_document_id: 1
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 13:00:00.000000'
-      transaction_type: UNKNOWN
-      opening_stock_quantity: '0.000000'
-      received_quantity: '0.000000'
-      issued_quantity: '0.000000'
-      closing_stock_quantity: '0.000000'
-      opening_stock_unit_id: 1
-      received_unit_id: 1
-      issued_unit_id: 1
-      closing_stock_unit_id: 1
-  - input: ref('stg_inventory_documents')
-    rows:
-    - inventory_document_id: 1
-      inventory_document_number: DOC001
-  - input: ref('stg_products')
-    rows:
-    - product_id: 1
-      product_code: '0001'
-  - input: ref('stg_warehouses')
-    rows:
-    - warehouse_id: 1
-      warehouse_name: Pharmacy
-  - input: ref('stg_units')
-    rows:
-    - unit_id: 1
-      unit_code: Tab
-  expect:
-    rows:
-    - inventory_movement_id: 1
-      dataset_row_number: 21
-      transaction_type: UNKNOWN
-      transaction_description: Unresolved description
-      closing_stock_quantity: '-1.000003'
-      recorded_delta_qty: '-0.000002'
-      has_negative_opening_stock: 1
-      has_negative_closing_stock: 1
-      is_unknown_movement: 1
-    - inventory_movement_id: 2
-      dataset_row_number: 22
-      transaction_type: RETURN
-      transaction_description: null
-      closing_stock_quantity: '12.123456'
-      recorded_delta_qty: '2.123456'
-      has_negative_opening_stock: 0
-      has_negative_closing_stock: 0
-      is_unknown_movement: 0
-    - inventory_movement_id: 3
-      dataset_row_number: 23
-      transaction_type: RETURN
-      transaction_description: null
-      closing_stock_quantity: '2.000000'
-      recorded_delta_qty: '-1.000000'
-      has_negative_opening_stock: 0
-      has_negative_closing_stock: 0
-      is_unknown_movement: 0
-    - inventory_movement_id: 4
-      dataset_row_number: 24
-      transaction_type: UNKNOWN
-      transaction_description: null
-      closing_stock_quantity: '0.000000'
-      recorded_delta_qty: '0.000000'
-      has_negative_opening_stock: 0
-      has_negative_closing_stock: 0
-      is_unknown_movement: 1
-- name: ledger_uses_export_sequence_and_isolates_scope
-  model: int_inventory_ledger_ordered
-  given:
-  - input: ref('int_inventory_movements_enriched')
-    rows:
-    - inventory_movement_id: 70
-      dataset_name: fixture
-      dataset_row_number: 30
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '20'
-      received_quantity: '0'
-      issued_quantity: '2'
-      closing_stock_quantity: '18'
-      recorded_delta_qty: '-2'
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 90
-      dataset_name: fixture
-      dataset_row_number: 10
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '-1'
-      received_quantity: '0'
-      issued_quantity: '1'
-      closing_stock_quantity: '-2'
-      recorded_delta_qty: '-1'
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 80
-      dataset_name: fixture
-      dataset_row_number: 20
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '-2'
-      received_quantity: '3'
-      issued_quantity: '0'
-      closing_stock_quantity: '1'
-      recorded_delta_qty: '3'
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 60
-      dataset_name: fixture
-      dataset_row_number: 40
-      product_id: 1
-      warehouse_id: 2
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '7'
-      received_quantity: '0'
-      issued_quantity: '0'
-      closing_stock_quantity: '7'
-      recorded_delta_qty: '0'
-      closing_stock_unit_id: 1
-    - inventory_movement_id: 50
-      dataset_name: other_export
-      dataset_row_number: 50
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      movement_date: '2024-02-29'
-      opening_stock_quantity: '99'
-      received_quantity: '0'
-      issued_quantity: '0'
-      closing_stock_quantity: '99'
-      recorded_delta_qty: '0'
-      closing_stock_unit_id: 1
-  expect:
-    rows:
-    - dataset_row_number: 10
-      previous_movement_id: null
-      previous_source_sequence: null
-      previous_closing_quantity: null
-      continuity_delta_qty: null
-      is_ledger_start: 1
-      is_discontinuity: 0
-      is_continuous: 0
-    - dataset_row_number: 20
-      previous_movement_id: 90
-      previous_source_sequence: 10
-      previous_closing_quantity: '-2'
-      continuity_delta_qty: '0'
-      is_ledger_start: 0
-      is_discontinuity: 0
-      is_continuous: 1
-    - dataset_row_number: 30
-      previous_movement_id: 80
-      previous_source_sequence: 20
-      previous_closing_quantity: '1'
-      continuity_delta_qty: '19'
-      is_ledger_start: 0
-      is_discontinuity: 1
-      is_continuous: 0
-    - dataset_row_number: 40
-      previous_movement_id: null
-      previous_source_sequence: null
-      previous_closing_quantity: null
-      continuity_delta_qty: null
-      is_ledger_start: 1
-      is_discontinuity: 0
-      is_continuous: 0
-    - dataset_row_number: 50
-      previous_movement_id: null
-      previous_source_sequence: null
-      previous_closing_quantity: null
-      continuity_delta_qty: null
-      is_ledger_start: 1
-      is_discontinuity: 0
-      is_continuous: 0
-- name: segments_reset_at_recorded_opening_and_keep_exact_decimals
-  model: int_inventory_segments
-  given:
-  - input: ref('int_inventory_ledger_ordered')
-    rows:
-    - inventory_movement_id: 10
-      dataset_name: fixture
-      dataset_row_number: 10
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      opening_stock_quantity: '-1.000001'
-      closing_stock_quantity: '-1.000003'
-      recorded_delta_qty: '-0.000002'
-      is_ledger_start: 1
-      is_discontinuity: 0
-      boundary_reason: LEDGER_START
-    - inventory_movement_id: 20
-      dataset_name: fixture
-      dataset_row_number: 20
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      opening_stock_quantity: '10.123456'
-      closing_stock_quantity: '8.123455'
-      recorded_delta_qty: '-2.000001'
-      is_ledger_start: 0
-      is_discontinuity: 1
-      boundary_reason: OPENING_DIFFERS_FROM_PREVIOUS_CLOSING
-    - inventory_movement_id: 30
-      dataset_name: fixture
-      dataset_row_number: 30
-      product_id: 1
-      warehouse_id: 1
-      movement_at: '2024-02-29 10:00:00.000000'
-      opening_stock_quantity: '8.123455'
-      closing_stock_quantity: '8.123455'
-      recorded_delta_qty: '0'
-      is_ledger_start: 0
-      is_discontinuity: 0
-      boundary_reason: CONTINUOUS
-  expect:
-    rows:
-    - dataset_row_number: 10
-      segment_start_sequence: 10
-      segment_end_sequence: 10
-      segment_id: '["fixture",1,1,10]'
-      segment_opening_quantity: '-1.000001'
-      segment_cumulative_delta_qty: '-0.000002'
-      reconstructed_closing_quantity: '-1.000003'
-    - dataset_row_number: 20
-      segment_start_sequence: 20
-      segment_end_sequence: 30
-      segment_id: '["fixture",1,1,20]'
-      segment_opening_quantity: '10.123456'
-      segment_cumulative_delta_qty: '-2.000001'
-      reconstructed_closing_quantity: '8.123455'
-    - dataset_row_number: 30
-      segment_start_sequence: 20
-      segment_end_sequence: 30
-      segment_id: '["fixture",1,1,20]'
-      segment_opening_quantity: '10.123456'
-      segment_cumulative_delta_qty: '-2.000001'
-      reconstructed_closing_quantity: '8.123455'
+  - name: inventory_keeps_unknown_returns_negatives_and_actual_flow_direction
+    description: >-
+      Recorded receipts and issues determine quantity changes while unknown classifications and negative balances
+      remain intact.
+    model: int_inventory_movements_enriched
+    given:
+      - input: ref('stg_inventory_movements')
+        rows:
+          - inventory_movement_id: 1
+            dataset_name: fixture
+            dataset_row_number: 21
+            inventory_document_id: 1
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.123456'
+            transaction_type: UNKNOWN
+            transaction_description: Unresolved description
+            opening_stock_quantity: '-1.000001'
+            received_quantity: '0.000000'
+            issued_quantity: '0.000002'
+            closing_stock_quantity: '-1.000003'
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 2
+            dataset_name: fixture
+            dataset_row_number: 22
+            inventory_document_id: 1
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 11:00:00.000000'
+            transaction_type: RETURN
+            opening_stock_quantity: '10.000000'
+            received_quantity: '2.123456'
+            issued_quantity: '0.000000'
+            closing_stock_quantity: '12.123456'
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 3
+            dataset_name: fixture
+            dataset_row_number: 23
+            inventory_document_id: 1
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 12:00:00.000000'
+            transaction_type: RETURN
+            opening_stock_quantity: '3.000000'
+            received_quantity: '0.000000'
+            issued_quantity: '1.000000'
+            closing_stock_quantity: '2.000000'
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 4
+            dataset_name: fixture
+            dataset_row_number: 24
+            inventory_document_id: 1
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 13:00:00.000000'
+            transaction_type: UNKNOWN
+            opening_stock_quantity: '0.000000'
+            received_quantity: '0.000000'
+            issued_quantity: '0.000000'
+            closing_stock_quantity: '0.000000'
+            opening_stock_unit_id: 1
+            received_unit_id: 1
+            issued_unit_id: 1
+            closing_stock_unit_id: 1
+      - input: ref('stg_inventory_documents')
+        rows:
+          - inventory_document_id: 1
+            inventory_document_number: DOC001
+      - input: ref('stg_products')
+        rows:
+          - product_id: 1
+            product_code: '0001'
+      - input: ref('stg_warehouses')
+        rows:
+          - warehouse_id: 1
+            warehouse_name: Pharmacy
+      - input: ref('stg_units')
+        rows:
+          - unit_id: 1
+            unit_code: Tab
+    expect:
+      rows:
+        - inventory_movement_id: 1
+          dataset_row_number: 21
+          transaction_type: UNKNOWN
+          transaction_description: Unresolved description
+          closing_stock_quantity: '-1.000003'
+          recorded_delta_qty: '-0.000002'
+          has_negative_opening_stock: 1
+          has_negative_closing_stock: 1
+          is_unknown_movement: 1
+        - inventory_movement_id: 2
+          dataset_row_number: 22
+          transaction_type: RETURN
+          transaction_description: null
+          closing_stock_quantity: '12.123456'
+          recorded_delta_qty: '2.123456'
+          has_negative_opening_stock: 0
+          has_negative_closing_stock: 0
+          is_unknown_movement: 0
+        - inventory_movement_id: 3
+          dataset_row_number: 23
+          transaction_type: RETURN
+          transaction_description: null
+          closing_stock_quantity: '2.000000'
+          recorded_delta_qty: '-1.000000'
+          has_negative_opening_stock: 0
+          has_negative_closing_stock: 0
+          is_unknown_movement: 0
+        - inventory_movement_id: 4
+          dataset_row_number: 24
+          transaction_type: UNKNOWN
+          transaction_description: null
+          closing_stock_quantity: '0.000000'
+          recorded_delta_qty: '0.000000'
+          has_negative_opening_stock: 0
+          has_negative_closing_stock: 0
+          is_unknown_movement: 1
+
+  - name: ledger_uses_export_sequence_and_isolates_scope
+    model: int_inventory_ledger_ordered
+    given:
+      - input: ref('int_inventory_movements_enriched')
+        rows:
+          - inventory_movement_id: 70
+            dataset_name: fixture
+            dataset_row_number: 30
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '20'
+            received_quantity: '0'
+            issued_quantity: '2'
+            closing_stock_quantity: '18'
+            recorded_delta_qty: '-2'
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 90
+            dataset_name: fixture
+            dataset_row_number: 10
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '-1'
+            received_quantity: '0'
+            issued_quantity: '1'
+            closing_stock_quantity: '-2'
+            recorded_delta_qty: '-1'
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 80
+            dataset_name: fixture
+            dataset_row_number: 20
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '-2'
+            received_quantity: '3'
+            issued_quantity: '0'
+            closing_stock_quantity: '1'
+            recorded_delta_qty: '3'
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 60
+            dataset_name: fixture
+            dataset_row_number: 40
+            product_id: 1
+            warehouse_id: 2
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '7'
+            received_quantity: '0'
+            issued_quantity: '0'
+            closing_stock_quantity: '7'
+            recorded_delta_qty: '0'
+            closing_stock_unit_id: 1
+          - inventory_movement_id: 50
+            dataset_name: other_export
+            dataset_row_number: 50
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            movement_date: '2024-02-29'
+            opening_stock_quantity: '99'
+            received_quantity: '0'
+            issued_quantity: '0'
+            closing_stock_quantity: '99'
+            recorded_delta_qty: '0'
+            closing_stock_unit_id: 1
+    expect:
+      rows:
+        - dataset_row_number: 10
+          previous_movement_id: null
+          previous_source_sequence: null
+          previous_closing_quantity: null
+          continuity_delta_qty: null
+          is_ledger_start: 1
+          is_discontinuity: 0
+          is_continuous: 0
+        - dataset_row_number: 20
+          previous_movement_id: 90
+          previous_source_sequence: 10
+          previous_closing_quantity: '-2'
+          continuity_delta_qty: '0'
+          is_ledger_start: 0
+          is_discontinuity: 0
+          is_continuous: 1
+        - dataset_row_number: 30
+          previous_movement_id: 80
+          previous_source_sequence: 20
+          previous_closing_quantity: '1'
+          continuity_delta_qty: '19'
+          is_ledger_start: 0
+          is_discontinuity: 1
+          is_continuous: 0
+        - dataset_row_number: 40
+          previous_movement_id: null
+          previous_source_sequence: null
+          previous_closing_quantity: null
+          continuity_delta_qty: null
+          is_ledger_start: 1
+          is_discontinuity: 0
+          is_continuous: 0
+        - dataset_row_number: 50
+          previous_movement_id: null
+          previous_source_sequence: null
+          previous_closing_quantity: null
+          continuity_delta_qty: null
+          is_ledger_start: 1
+          is_discontinuity: 0
+          is_continuous: 0
+
+  - name: segments_reset_at_recorded_opening_and_keep_exact_decimals
+    model: int_inventory_segments
+    given:
+      - input: ref('int_inventory_ledger_ordered')
+        rows:
+          - inventory_movement_id: 10
+            dataset_name: fixture
+            dataset_row_number: 10
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            opening_stock_quantity: '-1.000001'
+            closing_stock_quantity: '-1.000003'
+            recorded_delta_qty: '-0.000002'
+            is_ledger_start: 1
+            is_discontinuity: 0
+            boundary_reason: LEDGER_START
+          - inventory_movement_id: 20
+            dataset_name: fixture
+            dataset_row_number: 20
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            opening_stock_quantity: '10.123456'
+            closing_stock_quantity: '8.123455'
+            recorded_delta_qty: '-2.000001'
+            is_ledger_start: 0
+            is_discontinuity: 1
+            boundary_reason: OPENING_DIFFERS_FROM_PREVIOUS_CLOSING
+          - inventory_movement_id: 30
+            dataset_name: fixture
+            dataset_row_number: 30
+            product_id: 1
+            warehouse_id: 1
+            movement_at: '2024-02-29 10:00:00.000000'
+            opening_stock_quantity: '8.123455'
+            closing_stock_quantity: '8.123455'
+            recorded_delta_qty: '0'
+            is_ledger_start: 0
+            is_discontinuity: 0
+            boundary_reason: CONTINUOUS
+    expect:
+      rows:
+        - dataset_row_number: 10
+          segment_start_sequence: 10
+          segment_end_sequence: 10
+          segment_id: '["fixture",1,1,10]'
+          segment_opening_quantity: '-1.000001'
+          segment_cumulative_delta_qty: '-0.000002'
+          reconstructed_closing_quantity: '-1.000003'
+        - dataset_row_number: 20
+          segment_start_sequence: 20
+          segment_end_sequence: 30
+          segment_id: '["fixture",1,1,20]'
+          segment_opening_quantity: '10.123456'
+          segment_cumulative_delta_qty: '-2.000001'
+          reconstructed_closing_quantity: '8.123455'
+        - dataset_row_number: 30
+          segment_start_sequence: 20
+          segment_end_sequence: 30
+          segment_id: '["fixture",1,1,20]'
+          segment_opening_quantity: '10.123456'
+          segment_cumulative_delta_qty: '-2.000001'
+          reconstructed_closing_quantity: '8.123455'

@@ -1,332 +1,432 @@
 version: 2
+
 models:
-- name: fct_inventory_movement
-  description: Recorded inventory movements and their quantities, continuity conditions and segment membership.
-  config:
-    meta:
-      grain: &id001
-      - inventory_movement_id
-      limitations:
-      - Export order describes recorded observations, not certified physical or available stock.
-      - Separate export scopes must not be combined as one ledger.
-  columns:
-  - name: inventory_movement_id
-    description: Identifier of the inventory movement.
-    data_type: UInt32
-    data_tests:
-    - not_null
-  - name: dataset_name
-    description: Name of the dataset containing the transaction.
-    data_type: LowCardinality(String)
-    data_tests:
-    - not_null
-  - name: dataset_row_number
-    description: Original record number within the transaction dataset.
-    data_type: UInt32
-    data_tests:
-    - not_null
-  - name: inventory_document_id
-    description: Identifier of the inventory document.
-    data_type: UInt32
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_product')
-          field: product_id
-  - name: warehouse_id
-    description: Identifier of the storage location.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_warehouse')
-          field: warehouse_id
-  - name: movement_at
-    description: Date and time the stock movement was recorded.
-    data_type: DateTime64(6)
-  - name: product_name
-    description: Product name recorded with the transaction.
-    data_type: String
-  - name: drug_class_name
-    description: Drug classification recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: category_name
-    description: Product category recorded with the transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: consignment_status
-    description: Product ownership or consignment classification recorded with the movement.
-    data_type: LowCardinality(Nullable(String))
-  - name: product_status
-    description: Product status recorded with the inventory movement.
-    data_type: LowCardinality(Nullable(String))
-  - name: transaction_description
-    description: Original description of the inventory transaction.
-    data_type: Nullable(String)
-  - name: opening_stock_quantity
-    description: Stock quantity recorded before the movement.
-    data_type: Decimal(18, 6)
-  - name: received_quantity
-    description: Quantity received in the movement.
-    data_type: Decimal(18, 6)
-  - name: issued_quantity
-    description: Quantity issued in the movement.
-    data_type: Decimal(18, 6)
-  - name: closing_stock_quantity
-    description: Stock quantity recorded after the movement.
-    data_type: Decimal(18, 6)
-  - name: opening_stock_unit_id
-    description: Unit used for the stock quantity before the movement.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_unit')
-          field: unit_id
-  - name: received_unit_id
-    description: Unit used for the received quantity.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_unit')
-          field: unit_id
-  - name: issued_unit_id
-    description: Unit used for the issued quantity.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_unit')
-          field: unit_id
-  - name: closing_stock_unit_id
-    description: Unit used for the stock quantity after the movement.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_unit')
-          field: unit_id
-  - name: transaction_type
-    description: Type of inventory transaction.
-    data_type: LowCardinality(Nullable(String))
-  - name: supplier_name
-    description: Supplier named in the inventory transaction description.
-    data_type: Nullable(String)
-  - name: referenced_sales_invoice_number
-    description: Invoice number mentioned in the inventory transaction description.
-    data_type: Nullable(String)
-  - name: patient_code
-    description: Patient code mentioned in the inventory transaction description.
-    data_type: Nullable(String)
-  - name: movement_date
-    description: Calendar date on which the inventory movement was recorded.
-    data_type: Date32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_date')
-          field: calendar_date
-  - name: recorded_delta_qty
-    description: Recorded quantity received less recorded quantity issued, in the movement unit.
-    data_type: Decimal(18, 6)
-  - name: segment_id
-    data_type: String
-    description: Identifier of a continuity segment within an export, product and warehouse.
-    data_tests:
-    - not_null
-  - name: segment_start_sequence
-    data_type: UInt32
-    description: Export sequence of the first movement in the continuity segment.
-  - name: is_ledger_start
-    data_type: UInt8
-    description: Whether this is the first observed movement for the product and warehouse in the export.
-  - name: is_discontinuity
-    data_type: UInt8
-    description: Whether the opening quantity differs from the preceding recorded closing quantity.
-  - name: is_continuous
-    data_type: UInt8
-    description: Whether the opening quantity equals the preceding recorded closing quantity.
-  - name: continuity_delta_qty
-    data_type: Nullable(Decimal(18, 6))
-    description: Current opening quantity less the preceding recorded closing quantity.
-  - name: has_negative_opening_stock
-    description: Whether the recorded opening stock quantity is below zero.
-    data_type: UInt8
-  - name: has_negative_closing_stock
-    description: Whether the recorded closing stock quantity is below zero.
-    data_type: UInt8
-  - name: is_unknown_movement
-    description: Whether the recorded inventory transaction classification is UNKNOWN.
-    data_type: UInt8
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns: *id001
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('stg_inventory_movements')
-        primary_key: inventory_movement_id
-  - dimensional_join_cardinality:
-      name: fct_inventory_movement_dimension_join_cardinality
-      arguments:
+  - name: fct_inventory_movement
+    description: >-
+      One source inventory movement with recorded balances, signed flow effect, continuity diagnostics and segment
+      membership.
+
+    config:
+      meta:
         grain:
-        - inventory_movement_id
-        dimensions:
-        - to: ref('dim_product')
-          field: product_id
-          target_field: product_id
-        - to: ref('dim_warehouse')
-          field: warehouse_id
-          target_field: warehouse_id
-        - to: ref('dim_unit')
-          field: opening_stock_unit_id
-          target_field: unit_id
-        - to: ref('dim_unit')
-          field: received_unit_id
-          target_field: unit_id
-        - to: ref('dim_unit')
-          field: issued_unit_id
-          target_field: unit_id
-        - to: ref('dim_unit')
-          field: closing_stock_unit_id
-          target_field: unit_id
-        - to: ref('dim_date')
-          field: movement_date
-          target_field: calendar_date
-- name: fct_inventory_daily_observed
-  description: Closing stock observations and recorded flows on dates with inventory movements.
-  config:
-    meta:
-      grain: &id002
-      - dataset_name
-      - product_id
-      - warehouse_id
-      - observation_date
-      limitations:
-      - Export order describes recorded observations, not certified physical or available stock.
-      - Separate export scopes must not be combined as one ledger.
-  columns:
-  - name: dataset_name
-    description: Name of the dataset containing the transaction.
-    data_type: LowCardinality(String)
+          - inventory_movement_id
+        limitations:
+          - Export order describes recorded observations, not certified physical or available stock.
+          - Separate export scopes must not be combined as one ledger.
+
+    columns:
+      - name: inventory_movement_id
+        description: Identifier of the inventory movement.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: dataset_row_number
+        description: >-
+          Original row number within the source dataset. Defines export order, with gaps permitted within an individual
+          product ledger.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: inventory_document_id
+        description: Identifier of the inventory document.
+        data_type: UInt32
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_id
+
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_warehouse')
+                field: warehouse_id
+
+      - name: movement_at
+        description: Date and time the stock movement was recorded.
+        data_type: DateTime64(6)
+
+      - name: product_name
+        description: Product name recorded with the transaction.
+        data_type: String
+
+      - name: drug_class_name
+        description: Drug classification recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_name
+        description: Product category recorded with the transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: consignment_status
+        description: Product ownership or consignment classification recorded with the movement.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: product_status
+        description: Product status recorded with the inventory movement.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: transaction_description
+        description: Original description of the inventory transaction.
+        data_type: Nullable(String)
+
+      - name: opening_stock_quantity
+        description: >-
+          Recorded stock quantity immediately before the movement, in opening_stock_unit_id; negative values remain
+          recorded observations.
+        data_type: Decimal(18, 6)
+
+      - name: received_quantity
+        description: >-
+          Quantity recorded as inbound in received_unit_id; its direction comes from this field rather than transaction_type.
+        data_type: Decimal(18, 6)
+
+      - name: issued_quantity
+        description: >-
+          Quantity recorded as outbound in issued_unit_id; its direction comes from this field rather than transaction_type.
+        data_type: Decimal(18, 6)
+
+      - name: closing_stock_quantity
+        description: >-
+          Recorded stock quantity immediately after the movement, in closing_stock_unit_id; negative values remain
+          recorded observations.
+        data_type: Decimal(18, 6)
+
+      - name: opening_stock_unit_id
+        description: Identifier of the unit in which the opening stock quantity was recorded.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: received_unit_id
+        description: Identifier of the unit in which the inbound quantity was recorded.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: issued_unit_id
+        description: Identifier of the unit in which the outbound quantity was recorded.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: closing_stock_unit_id
+        description: Identifier of the unit in which the closing stock quantity was recorded.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: transaction_type
+        description: Type of inventory transaction.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: supplier_name
+        description: Supplier named in the inventory transaction description.
+        data_type: Nullable(String)
+
+      - name: referenced_sales_invoice_number
+        description: Invoice number mentioned in the inventory transaction description.
+        data_type: Nullable(String)
+
+      - name: patient_code
+        description: Patient code mentioned in the inventory transaction description.
+        data_type: Nullable(String)
+
+      - name: movement_date
+        description: Calendar date of movement_at, used to group recorded inventory movements by event date.
+        data_type: Date32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: calendar_date
+
+      - name: recorded_delta_qty
+        description: >-
+          Recorded received_quantity minus issued_quantity, in the matching movement unit; independent of the transaction
+          classification.
+        data_type: Decimal(18, 6)
+
+      - name: segment_id
+        data_type: String
+        description: >-
+          Continuity segment identified by dataset, product, warehouse and the source row at its opening anchor.
+        data_tests:
+          - not_null
+
+      - name: segment_start_sequence
+        data_type: UInt32
+        description: Source row number of the opening anchor for this continuity segment.
+
+      - name: is_ledger_start
+        data_type: UInt8
+        description: Whether this is the first source-ordered observation for the dataset, product and warehouse.
+
+      - name: is_discontinuity
+        data_type: UInt8
+        description: Whether a preceding observation exists and its closing differs from the current opening quantity.
+
+      - name: is_continuous
+        data_type: UInt8
+        description: Whether a preceding observation exists and its closing equals the current opening quantity.
+
+      - name: continuity_delta_qty
+        data_type: Nullable(Decimal(18, 6))
+        description: >-
+          Current opening quantity minus the preceding recorded closing in the same ledger. Absent at ledger start;
+          a nonzero gap is diagnostic rather than a flow.
+
+      - name: has_negative_opening_stock
+        description: Whether the recorded opening stock quantity is below zero.
+        data_type: UInt8
+
+      - name: has_negative_closing_stock
+        description: Whether the recorded closing stock quantity is below zero.
+        data_type: UInt8
+
+      - name: is_unknown_movement
+        description: Whether the recorded inventory transaction classification is UNKNOWN.
+        data_type: UInt8
     data_tests:
-    - not_null
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_product')
-          field: product_id
-  - name: warehouse_id
-    description: Identifier of the storage location.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_warehouse')
-          field: warehouse_id
-  - name: observation_date
-    data_type: Date32
-    description: Calendar date with one or more recorded inventory movements.
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_date')
-          field: calendar_date
-  - name: last_inventory_movement_id
-    data_type: UInt32
-    description: Identifier of the final movement in export order on the observed date.
-  - name: last_source_sequence
-    data_type: UInt32
-    description: Export sequence of the final movement on the observed date.
-  - name: last_movement_at
-    data_type: DateTime64(6)
-    description: Time recorded on the final movement in export order on the observed date.
-  - name: observed_closing_quantity
-    data_type: Decimal(18, 6)
-    description: Closing quantity recorded on the final movement in export order on the observed date.
-  - name: stock_unit_id
-    data_type: UInt32
-    description: Unit of the recorded stock quantity.
-    data_tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('dim_unit')
-          field: unit_id
-  - name: last_segment_id
-    data_type: String
-    description: Continuity segment of the final observed movement on the date.
-  - name: first_source_sequence
-    data_type: UInt32
-    description: Export sequence of the first movement on the observed date.
-  - name: recorded_received_quantity
-    data_type: Decimal(38, 6)
-    description: Total quantity recorded as received on the observed date, in the stock unit.
-  - name: recorded_issued_quantity
-    data_type: Decimal(38, 6)
-    description: Total quantity recorded as issued on the observed date, in the stock unit.
-  - name: recorded_delta_qty
-    description: Recorded quantity received less recorded quantity issued, in the movement unit.
-    data_type: Decimal(38, 6)
-  - name: movement_count
-    data_type: UInt64
-    description: Number of recorded movements on the observed date.
-  - name: discontinuity_count
-    data_type: UInt64
-    description: Number of movements whose opening differs from the preceding recorded closing on the observed date.
-  - name: segment_count
-    data_type: UInt64
-    description: Number of continuity segments observed on the date.
-  - name: stock_unit_count
-    data_type: UInt64
-    description: Number of distinct recorded stock units on the observed date.
-  - name: has_discontinuity
-    data_type: UInt8
-    description: Whether any movement on the observed date begins after a ledger gap.
-  - name: has_negative_closing_stock
-    description: Whether the recorded closing stock quantity is below zero.
-    data_type: UInt8
-  - name: has_ambiguous_latest_timestamp
-    data_type: UInt8
-    description: Whether different closing quantities are recorded at the latest timestamp on the observed date.
-  data_tests:
-  - unique_grain:
-      arguments:
-        columns: *id002
-  - dimensional_join_cardinality:
-      name: fct_inventory_daily_observed_dimension_join_cardinality
-      arguments:
+      - unique_grain:
+          arguments:
+
+            columns:
+              - inventory_movement_id
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('stg_inventory_movements')
+            primary_key: inventory_movement_id
+      - dimensional_join_cardinality:
+          name: fct_inventory_movement_dimension_join_cardinality
+          arguments:
+            grain:
+              - inventory_movement_id
+            dimensions:
+              - to: ref('dim_product')
+                field: product_id
+                target_field: product_id
+              - to: ref('dim_warehouse')
+                field: warehouse_id
+                target_field: warehouse_id
+              - to: ref('dim_unit')
+                field: opening_stock_unit_id
+                target_field: unit_id
+              - to: ref('dim_unit')
+                field: received_unit_id
+                target_field: unit_id
+              - to: ref('dim_unit')
+                field: issued_unit_id
+                target_field: unit_id
+              - to: ref('dim_unit')
+                field: closing_stock_unit_id
+                target_field: unit_id
+              - to: ref('dim_date')
+                field: movement_date
+                target_field: calendar_date
+
+  - name: fct_inventory_daily_observed
+    description: >-
+      One dataset, product, warehouse and observed date, with daily recorded flows and the closing balance selected
+      in source order.
+
+    config:
+      meta:
         grain:
-        - dataset_name
-        - product_id
-        - warehouse_id
-        - observation_date
-        dimensions:
-        - to: ref('dim_product')
-          field: product_id
-          target_field: product_id
-        - to: ref('dim_warehouse')
-          field: warehouse_id
-          target_field: warehouse_id
-        - to: ref('dim_unit')
-          field: stock_unit_id
-          target_field: unit_id
-        - to: ref('dim_date')
-          field: observation_date
-          target_field: calendar_date
+          - dataset_name
+          - product_id
+          - warehouse_id
+          - observation_date
+        limitations:
+          - Export order describes recorded observations, not certified physical or available stock.
+          - Separate export scopes must not be combined as one ledger.
+
+    columns:
+      - name: dataset_name
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_id
+
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_warehouse')
+                field: warehouse_id
+
+      - name: observation_date
+        data_type: Date32
+        description: Calendar date with one or more recorded inventory movements.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: calendar_date
+
+      - name: last_inventory_movement_id
+        data_type: UInt32
+        description: Identifier of the final movement in export order on the observed date.
+
+      - name: last_source_sequence
+        data_type: UInt32
+        description: Export sequence of the final movement on the observed date.
+
+      - name: last_movement_at
+        data_type: DateTime64(6)
+        description: >-
+          Event time on the last source-ordered movement on the observed date; selection follows source row order.
+
+      - name: observed_closing_quantity
+        data_type: Decimal(18, 6)
+        description: >-
+          Closing quantity from the last source-ordered movement on the observed date, in stock_unit_id; a balance
+          rather than a daily flow.
+
+      - name: stock_unit_id
+        data_type: UInt32
+        description: Unit of the recorded stock quantity.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: last_segment_id
+        data_type: String
+        description: Continuity segment of the final observed movement on the date.
+
+      - name: first_source_sequence
+        data_type: UInt32
+        description: Export sequence of the first movement on the observed date.
+
+      - name: recorded_received_quantity
+        data_type: Decimal(38, 6)
+        description: >-
+          Sum of received quantities on the observed date for the dataset, product and warehouse, in the recorded
+          stock unit.
+
+      - name: recorded_issued_quantity
+        data_type: Decimal(38, 6)
+        description: >-
+          Sum of issued quantities on the observed date for the dataset, product and warehouse, in the recorded
+          stock unit.
+
+      - name: recorded_delta_qty
+        description: >-
+          Sum of recorded received minus issued quantities on the observed date, in the recorded stock unit; excludes
+          discontinuity gaps.
+        data_type: Decimal(38, 6)
+
+      - name: movement_count
+        data_type: UInt64
+        description: Number of recorded movements on the observed date.
+
+      - name: discontinuity_count
+        data_type: UInt64
+        description: Number of movements whose opening differs from the preceding recorded closing on the observed
+          date.
+
+      - name: segment_count
+        data_type: UInt64
+        description: Number of continuity segments observed on the date.
+
+      - name: stock_unit_count
+        data_type: UInt64
+        description: >-
+          Number of distinct closing-stock units recorded on the observed date for the dataset, product and warehouse.
+
+      - name: has_discontinuity
+        data_type: UInt8
+        description: Whether any movement on the observed date begins after a ledger gap.
+
+      - name: has_negative_closing_stock
+        description: Whether the selected final source-ordered closing balance on the observed date is negative.
+        data_type: UInt8
+
+      - name: has_ambiguous_latest_timestamp
+        data_type: UInt8
+        description: >-
+          Whether closing quantities disagree at the latest event timestamp on the observed date; daily closing
+          selection still follows source order.
+    data_tests:
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - warehouse_id
+              - observation_date
+      - dimensional_join_cardinality:
+          name: fct_inventory_daily_observed_dimension_join_cardinality
+          arguments:
+            grain:
+              - dataset_name
+              - product_id
+              - warehouse_id
+              - observation_date
+            dimensions:
+              - to: ref('dim_product')
+                field: product_id
+                target_field: product_id
+              - to: ref('dim_warehouse')
+                field: warehouse_id
+                target_field: warehouse_id
+              - to: ref('dim_unit')
+                field: stock_unit_id
+                target_field: unit_id
+              - to: ref('dim_date')
+                field: observation_date
+                target_field: calendar_date

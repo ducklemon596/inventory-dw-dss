@@ -1,159 +1,160 @@
 version: 2
+
 unit_tests:
-- name: sales_fact_preserves_lines_amounts_signed_precision_and_unresolved_nulls
-  model: fct_sales_line
-  given:
-  - input: ref('int_sales_quantity_converted')
-    rows:
-    - sales_invoice_line_id: 1
-      dataset_name: fixture
-      dataset_row_number: 1
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '-1.000001'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: identity
-      applied_conversion_factor: '1.000000'
-      stock_unit_qty: '-1.000001000000'
-    - sales_invoice_line_id: 2
-      dataset_name: fixture
-      dataset_row_number: 2
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: approved
-      applied_conversion_factor: '1.000000'
-      stock_unit_qty: '0.000000000000'
-    - sales_invoice_line_id: 3
-      dataset_name: fixture
-      dataset_row_number: 3
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: null
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: candidate
-      applied_conversion_factor: null
-      stock_unit_qty: null
-    - sales_invoice_line_id: 4
-      dataset_name: fixture
-      dataset_row_number: 4
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: quarantined
-      applied_conversion_factor: null
-      stock_unit_qty: null
-    - sales_invoice_line_id: 5
-      dataset_name: fixture
-      dataset_row_number: 5
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: unmapped
-      applied_conversion_factor: null
-      stock_unit_qty: null
-  expect:
-    rows:
-    - sales_invoice_line_id: 1
-      dataset_name: fixture
-      dataset_row_number: 1
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '-1.000001'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: identity
-      applied_conversion_factor: '1.000000'
-      stock_unit_qty: '-1.000001000000'
-    - sales_invoice_line_id: 2
-      dataset_name: fixture
-      dataset_row_number: 2
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: approved
-      applied_conversion_factor: '1.000000'
-      stock_unit_qty: '0.000000000000'
-    - sales_invoice_line_id: 3
-      dataset_name: fixture
-      dataset_row_number: 3
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: null
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: candidate
-      applied_conversion_factor: null
-      stock_unit_qty: null
-    - sales_invoice_line_id: 4
-      dataset_name: fixture
-      dataset_row_number: 4
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: quarantined
-      applied_conversion_factor: null
-      stock_unit_qty: null
-    - sales_invoice_line_id: 5
-      dataset_name: fixture
-      dataset_row_number: 5
-      sold_at: '2024-02-29 10:00:00.123456'
-      sold_date: '2024-02-29'
-      shift_date: '2021-08-06'
-      sold_quantity: '0.000000'
-      unit_price: '123.456789'
-      service_fee_amount: '0.123456'
-      packaging_fee_amount: '0.000000'
-      total_amount: '0.000000'
-      mapping_version: uom_mapping_v2_2026-11-08
-      conversion_status: unmapped
-      applied_conversion_factor: null
-      stock_unit_qty: null
+  - name: sales_fact_preserves_lines_amounts_signed_precision_and_unresolved_nulls
+    model: fct_sales_line
+    given:
+      - input: ref('int_sales_quantity_converted')
+        rows:
+          - sales_invoice_line_id: 1
+            dataset_name: fixture
+            dataset_row_number: 1
+            sold_at: '2024-02-29 10:00:00.123456'
+            sold_date: '2024-02-29'
+            shift_date: '2021-08-06'
+            sold_quantity: '-1.000001'
+            unit_price: '123.456789'
+            service_fee_amount: '0.123456'
+            packaging_fee_amount: '0.000000'
+            total_amount: '0.000000'
+            mapping_version: uom_mapping_v2_2026-11-08
+            conversion_status: identity
+            applied_conversion_factor: '1.000000'
+            stock_unit_qty: '-1.000001000000'
+          - sales_invoice_line_id: 2
+            dataset_name: fixture
+            dataset_row_number: 2
+            sold_at: '2024-02-29 10:00:00.123456'
+            sold_date: '2024-02-29'
+            shift_date: '2021-08-06'
+            sold_quantity: '0.000000'
+            unit_price: '123.456789'
+            service_fee_amount: '0.123456'
+            packaging_fee_amount: '0.000000'
+            total_amount: '0.000000'
+            mapping_version: uom_mapping_v2_2026-11-08
+            conversion_status: approved
+            applied_conversion_factor: '1.000000'
+            stock_unit_qty: '0.000000000000'
+          - sales_invoice_line_id: 3
+            dataset_name: fixture
+            dataset_row_number: 3
+            sold_at: '2024-02-29 10:00:00.123456'
+            sold_date: '2024-02-29'
+            shift_date: '2021-08-06'
+            sold_quantity: '0.000000'
+            unit_price: '123.456789'
+            service_fee_amount: null
+            packaging_fee_amount: '0.000000'
+            total_amount: '0.000000'
+            mapping_version: uom_mapping_v2_2026-11-08
+            conversion_status: candidate
+            applied_conversion_factor: null
+            stock_unit_qty: null
+          - sales_invoice_line_id: 4
+            dataset_name: fixture
+            dataset_row_number: 4
+            sold_at: '2024-02-29 10:00:00.123456'
+            sold_date: '2024-02-29'
+            shift_date: '2021-08-06'
+            sold_quantity: '0.000000'
+            unit_price: '123.456789'
+            service_fee_amount: '0.123456'
+            packaging_fee_amount: '0.000000'
+            total_amount: '0.000000'
+            mapping_version: uom_mapping_v2_2026-11-08
+            conversion_status: quarantined
+            applied_conversion_factor: null
+            stock_unit_qty: null
+          - sales_invoice_line_id: 5
+            dataset_name: fixture
+            dataset_row_number: 5
+            sold_at: '2024-02-29 10:00:00.123456'
+            sold_date: '2024-02-29'
+            shift_date: '2021-08-06'
+            sold_quantity: '0.000000'
+            unit_price: '123.456789'
+            service_fee_amount: '0.123456'
+            packaging_fee_amount: '0.000000'
+            total_amount: '0.000000'
+            mapping_version: uom_mapping_v2_2026-11-08
+            conversion_status: unmapped
+            applied_conversion_factor: null
+            stock_unit_qty: null
+    expect:
+      rows:
+        - sales_invoice_line_id: 1
+          dataset_name: fixture
+          dataset_row_number: 1
+          sold_at: '2024-02-29 10:00:00.123456'
+          sold_date: '2024-02-29'
+          shift_date: '2021-08-06'
+          sold_quantity: '-1.000001'
+          unit_price: '123.456789'
+          service_fee_amount: '0.123456'
+          packaging_fee_amount: '0.000000'
+          total_amount: '0.000000'
+          mapping_version: uom_mapping_v2_2026-11-08
+          conversion_status: identity
+          applied_conversion_factor: '1.000000'
+          stock_unit_qty: '-1.000001000000'
+        - sales_invoice_line_id: 2
+          dataset_name: fixture
+          dataset_row_number: 2
+          sold_at: '2024-02-29 10:00:00.123456'
+          sold_date: '2024-02-29'
+          shift_date: '2021-08-06'
+          sold_quantity: '0.000000'
+          unit_price: '123.456789'
+          service_fee_amount: '0.123456'
+          packaging_fee_amount: '0.000000'
+          total_amount: '0.000000'
+          mapping_version: uom_mapping_v2_2026-11-08
+          conversion_status: approved
+          applied_conversion_factor: '1.000000'
+          stock_unit_qty: '0.000000000000'
+        - sales_invoice_line_id: 3
+          dataset_name: fixture
+          dataset_row_number: 3
+          sold_at: '2024-02-29 10:00:00.123456'
+          sold_date: '2024-02-29'
+          shift_date: '2021-08-06'
+          sold_quantity: '0.000000'
+          unit_price: '123.456789'
+          service_fee_amount: null
+          packaging_fee_amount: '0.000000'
+          total_amount: '0.000000'
+          mapping_version: uom_mapping_v2_2026-11-08
+          conversion_status: candidate
+          applied_conversion_factor: null
+          stock_unit_qty: null
+        - sales_invoice_line_id: 4
+          dataset_name: fixture
+          dataset_row_number: 4
+          sold_at: '2024-02-29 10:00:00.123456'
+          sold_date: '2024-02-29'
+          shift_date: '2021-08-06'
+          sold_quantity: '0.000000'
+          unit_price: '123.456789'
+          service_fee_amount: '0.123456'
+          packaging_fee_amount: '0.000000'
+          total_amount: '0.000000'
+          mapping_version: uom_mapping_v2_2026-11-08
+          conversion_status: quarantined
+          applied_conversion_factor: null
+          stock_unit_qty: null
+        - sales_invoice_line_id: 5
+          dataset_name: fixture
+          dataset_row_number: 5
+          sold_at: '2024-02-29 10:00:00.123456'
+          sold_date: '2024-02-29'
+          shift_date: '2021-08-06'
+          sold_quantity: '0.000000'
+          unit_price: '123.456789'
+          service_fee_amount: '0.123456'
+          packaging_fee_amount: '0.000000'
+          total_amount: '0.000000'
+          mapping_version: uom_mapping_v2_2026-11-08
+          conversion_status: unmapped
+          applied_conversion_factor: null
+          stock_unit_qty: null

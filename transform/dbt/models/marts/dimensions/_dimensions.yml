@@ -1,158 +1,192 @@
 version: 2
+
 models:
-- name: dim_product
-  description: Current pharmacy products and their catalog classifications.
-  config:
-    meta:
-      grain:
-      - product_id
-      scd_type: 1
-  data_tests:
-  - matches_declared_schema
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('stg_products')
-        primary_key: product_id
-  columns:
-  - name: product_id
-    description: Identifier of the product.
-    data_type: UInt32
+  - name: dim_product
+    description: >-
+      Current pharmacy product catalog with manufacturer, regulatory drug class and merchandise category; historical
+      labels remain on transactions.
+
+    config:
+      meta:
+        grain:
+          - product_id
+        scd_type: 1
     data_tests:
-    - not_null
-    - unique
-  - name: product_code
-    description: Code used by the pharmacy to identify the product.
-    data_type: String
+      - matches_declared_schema
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('stg_products')
+            primary_key: product_id
+
+    columns:
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - unique
+
+      - name: product_code
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
+        data_type: String
+        data_tests:
+          - not_null
+          - unique
+
+      - name: product_name
+        description: Current product name.
+        data_type: Nullable(String)
+
+      - name: manufacturer_id
+        description: Identifier of the current product manufacturer.
+        data_type: Nullable(UInt32)
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_manufacturers')
+                field: manufacturer_id
+
+      - name: manufacturer_name
+        description: Name of the current product manufacturer.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: drug_class_id
+        description: Identifier of the current drug classification.
+        data_type: Nullable(UInt32)
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_drug_classes')
+                field: drug_class_id
+
+      - name: drug_class_name
+        description: Current drug classification name.
+        data_type: LowCardinality(Nullable(String))
+
+      - name: category_id
+        description: Identifier of the current product category.
+        data_type: Nullable(UInt32)
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_categories')
+                field: category_id
+
+      - name: category_name
+        description: Current product category name.
+        data_type: LowCardinality(Nullable(String))
+
+  - name: dim_warehouse
+    description: Storage locations where pharmacy inventory is recorded.
+
+    config:
+      meta:
+        grain:
+          - warehouse_id
+        scd_type: 1
     data_tests:
-    - not_null
-    - unique
-  - name: product_name
-    description: Current product name.
-    data_type: Nullable(String)
-  - name: manufacturer_id
-    description: Identifier of the current product manufacturer.
-    data_type: Nullable(UInt32)
+      - matches_declared_schema
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('stg_warehouses')
+            primary_key: warehouse_id
+
+    columns:
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - unique
+
+      - name: warehouse_name
+        description: Current name of the storage location.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_unit
+    description: Units used for recorded sales and stock quantities.
+
+    config:
+      meta:
+        grain:
+          - unit_id
+        scd_type: 1
     data_tests:
-    - relationships:
-        arguments:
-          to: ref('stg_manufacturers')
-          field: manufacturer_id
-  - name: manufacturer_name
-    description: Name of the current product manufacturer.
-    data_type: LowCardinality(Nullable(String))
-  - name: drug_class_id
-    description: Identifier of the current drug classification.
-    data_type: Nullable(UInt32)
+      - matches_declared_schema
+      - preserves_source_rows:
+          arguments:
+            source_relation: ref('stg_units')
+            primary_key: unit_id
+
+    columns:
+      - name: unit_id
+        description: Identifier of the unit of measure.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - unique
+
+      - name: unit_code
+        description: Unit label used by the pharmacy.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_date
+    description: Calendar dates and their civil and ISO calendar attributes.
+
+    config:
+      meta:
+        grain:
+          - calendar_date
     data_tests:
-    - relationships:
-        arguments:
-          to: ref('stg_drug_classes')
-          field: drug_class_id
-  - name: drug_class_name
-    description: Current drug classification name.
-    data_type: LowCardinality(Nullable(String))
-  - name: category_id
-    description: Identifier of the current product category.
-    data_type: Nullable(UInt32)
-    data_tests:
-    - relationships:
-        arguments:
-          to: ref('stg_categories')
-          field: category_id
-  - name: category_name
-    description: Current product category name.
-    data_type: LowCardinality(Nullable(String))
-- name: dim_warehouse
-  description: Storage locations where pharmacy inventory is recorded.
-  config:
-    meta:
-      grain:
-      - warehouse_id
-      scd_type: 1
-  data_tests:
-  - matches_declared_schema
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('stg_warehouses')
-        primary_key: warehouse_id
-  columns:
-  - name: warehouse_id
-    description: Identifier of the storage location.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - unique
-  - name: warehouse_name
-    description: Current name of the storage location.
-    data_type: LowCardinality(String)
-    data_tests:
-    - not_null
-    - unique
-- name: dim_unit
-  description: Units used for recorded sales and stock quantities.
-  config:
-    meta:
-      grain:
-      - unit_id
-      scd_type: 1
-  data_tests:
-  - matches_declared_schema
-  - preserves_source_rows:
-      arguments:
-        source_relation: ref('stg_units')
-        primary_key: unit_id
-  columns:
-  - name: unit_id
-    description: Identifier of the unit of measure.
-    data_type: UInt32
-    data_tests:
-    - not_null
-    - unique
-  - name: unit_code
-    description: Unit label used by the pharmacy.
-    data_type: LowCardinality(String)
-    data_tests:
-    - not_null
-    - unique
-- name: dim_date
-  description: Calendar dates and their civil and ISO calendar attributes.
-  config:
-    meta:
-      grain:
-      - calendar_date
-  data_tests:
-  - matches_declared_schema
-  columns:
-  - name: calendar_date
-    description: Calendar date.
-    data_type: Date32
-    data_tests:
-    - not_null
-    - unique
-  - name: calendar_year
-    description: Civil calendar year.
-    data_type: UInt16
-  - name: calendar_quarter
-    description: Quarter of the civil calendar year.
-    data_type: UInt8
-  - name: calendar_month
-    description: Month number within the civil calendar year.
-    data_type: UInt8
-  - name: day_of_month
-    description: Day number within the calendar month.
-    data_type: UInt8
-  - name: iso_day_of_week
-    description: Day of the week, with Monday numbered one and Sunday seven.
-    data_type: UInt8
-  - name: iso_week
-    description: Week number within the ISO calendar year.
-    data_type: UInt8
-  - name: iso_year
-    description: ISO week year.
-    data_type: UInt16
-  - name: month_start_date
-    description: First date of the calendar month.
-    data_type: Date32
-  - name: is_weekend
-    description: Whether the date is a Saturday or Sunday.
-    data_type: UInt8
+      - matches_declared_schema
+
+    columns:
+      - name: calendar_date
+        description: Calendar date.
+        data_type: Date32
+        data_tests:
+          - not_null
+          - unique
+
+      - name: calendar_year
+        description: Civil calendar year.
+        data_type: UInt16
+
+      - name: calendar_quarter
+        description: Quarter of the civil calendar year.
+        data_type: UInt8
+
+      - name: calendar_month
+        description: Month number within the civil calendar year.
+        data_type: UInt8
+
+      - name: day_of_month
+        description: Day number within the calendar month.
+        data_type: UInt8
+
+      - name: iso_day_of_week
+        description: Day of the week, with Monday numbered one and Sunday seven.
+        data_type: UInt8
+
+      - name: iso_week
+        description: Week number within the ISO calendar year.
+        data_type: UInt8
+
+      - name: iso_year
+        description: ISO week year.
+        data_type: UInt16
+
+      - name: month_start_date
+        description: First date of the calendar month.
+        data_type: Date32
+
+      - name: is_weekend
+        description: Whether the date is a Saturday or Sunday.
+        data_type: UInt8

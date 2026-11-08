@@ -13,8 +13,10 @@ Tests are the executable warehouse contract. A singular SQL test returns failure
 Column not-null/unique/relationship checks are declared beside model schemas. Unit fixtures live beside relevant models in `_unit_tests.yml` / `_uom_unit_tests.yml`, not in this directory. [The complete test guide](../../../tests/README.md) has Python and acceptance commands.
 
 ```bash
-uv run --locked dbt test --select fct_sales_line --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
-uv run --locked dbt build --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+uv run --locked inventory-dw-dss transform --test --select fct_sales_line
+uv run --locked inventory-dw-dss transform
 ```
 
 A selected test can reference multiple models; ensure all inputs exist and reflect one accepted state. Inspect failing row keys and compiled SQL before editing a rule. Passing compile or a row-count-only check does not prove field-level correctness. Never convert missing/invalid values to zero to silence tests.
+
+Inspect returned failing keys and SQL under `target/compiled/inventory_dw/` in the dbt project. A model selection includes its attached tests; cross-model checks can also read unselected relations. Use the complete build for acceptance after targeted changes.

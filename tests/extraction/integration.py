@@ -17,6 +17,7 @@ import psycopg
 from psycopg import sql
 
 from inventory_dw_dss import extraction as pipeline
+from inventory_dw_dss.cli import main as command
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -113,7 +114,7 @@ def main():
                 'PGDATABASE': pgdb, 'CLICKHOUSE_RAW_SCHEMA': rawdb, 'CLICKHOUSE_DB': dwdb,
             }):
                 def run():
-                    result = pipeline.extract_incremental(batch_size=1)
+                    result = pipeline.load_raw(batch_size=1)
                     assert result['status'] == 'passed'
                     return result['tables']
 
@@ -204,6 +205,52 @@ def main():
                 empty = run()['sales_line']
                 assert empty['rows_read'] == 0 and not empty['publication_required'] and empty['raw_rows'] == 4
 
+                # The public CLI can replay older dates explicitly without changing default watermarks.
+                source.execute('UPDATE oltp.sales_line SET unit_price=456 WHERE sales_line_id=%s', (late,))
+                command(['load', 'raw', '--start', '2024-01-01', '--end', '2024-01-01'])
+                selected = json.loads(Path('reports/raw_extraction.json').read_text())
+                assert selected['mode'] == 'range'
+                assert selected['tables']['sales_line']['rows_read'] == 1
+                assert selected['tables']['inventory_movement']['rows_read'] == 0
+                assert client.query(f"SELECT unit_price FROM `{rawdb}`.sales_line WHERE sales_line_id='{late}'").first_row[0] == '456'
+                stable = fingerprint()
+                command(['load', 'raw', '--start', '2024-01-01', '--end', '2024-01-01'])
+                assert fingerprint() == stable
+                source.execute('UPDATE oltp.sales_line SET unit_price=222 WHERE sales_line_id=%s', (boundary,))
+                command(['load', 'raw', '--start', '2024-01-01', '--end', '2024-01-01'])
+                assert client.query(f"SELECT unit_price FROM `{rawdb}`.sales_line WHERE sales_line_id='{boundary}'").first_row[0] == '99'
+                final_day = sale(6, '2024-01-01 23:59:59.999999')
+                next_day = sale(7, '2024-01-02 00:00:00.000000')
+                command(['load', 'raw', '--start', '2024-01-01', '--end', '2024-01-01'])
+                assert client.query(f"SELECT count() FROM `{rawdb}`.sales_line WHERE sales_line_id='{final_day}'").first_row[0] == 1
+                assert client.query(f"SELECT count() FROM `{rawdb}`.sales_line WHERE sales_line_id='{next_day}'").first_row[0] == 0
+                stable = fingerprint()
+                command(['load', 'raw', '--start', '2030-01-01', '--end', '2030-01-01'])
+                assert fingerprint() == stable
+                command(['load', 'raw', '--full'])
+                full = json.loads(Path('reports/raw_extraction.json').read_text())
+                assert full['mode'] == 'full'
+                assert full['tables']['sales_line']['rows_read'] == source.execute('SELECT count(*) FROM oltp.sales_line').fetchone()[0]
+                assert client.query(f"SELECT unit_price FROM `{rawdb}`.sales_line WHERE sales_line_id='{boundary}'").first_row[0] == '222'
+                # Full means merge all source keys, not synchronize source deletions.
+                assert client.query(f"SELECT count() FROM `{rawdb}`.sales_line WHERE sales_line_id='{first}'").first_row[0] == 1
+                stable = fingerprint()
+                command(['load', 'raw', '--full'])
+                assert fingerprint() == stable
+                command(['load', 'raw'])
+                assert fingerprint() == stable
+                for suffix_kind, arguments in [('full', ['--full']), ('range', ['--start', '2024-01-01', '--end', '2024-01-01'])]:
+                    new_raw = f'{rawdb}_{suffix_kind}'
+                    work_databases.add(new_raw)
+                    with patch.dict(os.environ, {'CLICKHOUSE_RAW_SCHEMA': new_raw}):
+                        command(['load', 'raw', *arguments])
+                        count, unique = client.query(f'SELECT count(), uniqExact(sales_line_id) FROM `{new_raw}`.sales_line').first_row
+                        expected = source.execute('SELECT count(*) FROM oltp.sales_line' +
+                            (" WHERE sold_at >= '2024-01-01' AND sold_at < '2024-01-02'" if suffix_kind == 'range' else '')).fetchone()[0]
+                        assert count == unique == expected
+                        command(['load', 'raw', *arguments])
+                        assert client.query(f'SELECT count() FROM `{new_raw}`.sales_line').first_row[0] == expected
+
                 # Build and execute actual dbt tests against these fixture raw tables.
                 env = {**os.environ, 'DBT_PROFILES_DIR': str(ROOT / 'transform/dbt'),
                        'DBT_TARGET_PATH': f'{temp}/dbt-target', 'DBT_LOG_PATH': f'{temp}/dbt-logs'}
@@ -222,7 +269,7 @@ def main():
                 }
                 assert {r['unique_id'] for r in results} == expected
                 assert all(r['status'] in ('pass', 'success') for r in results)
-        print('PASS: initial load, rerun, independent watermarks, boundary updates, refresh, empty delta, failure recovery and dbt.')
+        print('PASS: incremental/full/range CLI, inclusive dates, repeated merges, independent watermarks, refresh, empty delta, failure recovery and dbt.')
     finally:
         for database in (dwdb, rawdb, *work_databases):
             client.command(f'DROP DATABASE IF EXISTS `{database}` SYNC')

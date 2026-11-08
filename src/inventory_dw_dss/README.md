@@ -1,40 +1,59 @@
-# Python package
+# Pipeline CLI and ClickHouse raw loading
 
-## Responsibilities
+The installed entrypoint is `inventory-dw-dss`, declared in [pyproject.toml](../../pyproject.toml). It exposes two operation families: `load <destination>` and `transform`. Commands parse and validate arguments before importing destination-specific dependencies.
 
-| Module | Role and boundary |
+| Task | Recommended guide |
 |---|---|
-| [cli.py](cli.py) | Installed `inventory-dw-dss` entry point; routes `extract` and explicit `bootstrap` |
-| [extraction.py](extraction.py) | Reads one PostgreSQL snapshot, stages/validates raw replacements, publishes them; no CSV or bootstrap imports |
-| [oltp_ingestion](oltp_ingestion/README.md) | Optional pandas preparation and transactional OLTP initialization |
-| [validation](validation/README.md) | Read-only export lineage and inventory reconciliation, invoked by script wrappers |
+| Optional source CSV → PostgreSQL | [PostgreSQL loader](oltp_ingestion/README.md) |
+| PostgreSQL → ClickHouse raw | Commands below |
+| ClickHouse raw → dbt marts/tests | [Transformations](../../transform/dbt/README.md) |
+
+## ClickHouse raw prerequisites
+
+PostgreSQL must contain all 12 supported `oltp` tables; ClickHouse must be healthy. [Service configuration](../../infra/README.md) lists connection defaults and environment variables. Extraction reads PostgreSQL only and does not import pandas or read CSVs. Run commands from the repository root so the extraction receipt is written under its `reports/` directory.
+
+## Routine incremental load
 
 ```bash
-uv run --locked inventory-dw-dss --help
-uv run --locked inventory-dw-dss extract --help
-uv run --locked --group bootstrap inventory-dw-dss bootstrap --help
+uv run --locked inventory-dw-dss load raw
 ```
 
-`extract --batch-size 20000` is the operational loading interface. The CLI validates a positive batch size and reports extraction errors with a nonzero status. Bootstrap dependencies are checked/imported only when explicitly selected. No source connection failure triggers automatic initialization.
+For `sales_line`, read rows with `sold_at >= max(raw.sold_at)`; inventory uses its independent `occurred_at` watermark. Empty/missing raw transaction tables cause an initial all-source read. Timestamps retain microseconds. Ten reference/header tables refresh fully each time.
 
-## Extraction maintenance
+The inclusive boundary deliberately rereads the latest timestamp. Transactions merge by OLTP PK, so repeated reads replace matching keys without duplicate rows. Other existing transactions remain present. PostgreSQL reads are bounded; ClickHouse still copies its existing raw transaction rows locally when building the reconciled replacement.
 
-`prepare_table()` stages and reconciles one table; `publish()` exchanges/renames prepared tables; `rollback_publication()` reverses acknowledged operations. `extract_incremental()` owns connections, snapshot/lock lifetime, report and cleanup. Keep imports and connection variables compatible with the CLI and validators.
-
-Business transformations belong in dbt, not Python. Read-only validators share canonical serialization code because lineage fingerprints must agree exactly. Do not create another parser to reproduce analytical SQL. [Regression instructions](../../tests/README.md) cover publication unit tests and disposable integration failures.
-
-## Extraction behavior
-
-Run from the repository root after PostgreSQL and ClickHouse are healthy:
+## Full load
 
 ```bash
-uv run --locked inventory-dw-dss extract --batch-size 20000
+uv run --locked inventory-dw-dss load raw --full
 ```
 
-The extractor reads all 12 OLTP tables from one PostgreSQL `REPEATABLE READ READ ONLY` snapshot. It streams rows in batches. Sales lines use `sold_at` and inventory movements use `occurred_at` as independent inclusive watermarks read from their corresponding raw tables. An absent/empty raw table triggers a full initial read. The ten reference/header tables refresh fully on each extraction.
+Read all PostgreSQL transactions and merge by PK, including historical values outside the current watermark. All reference/header records refresh, including source deletions. Retained transactions whose referenced header was deleted can fail dbt relationships and require source review. This is an all-source merge, not truncate or deletion synchronization: a transaction removed from PostgreSQL remains in raw until an independently reviewed removal procedure is applied.
 
-Raw columns are stored as PostgreSQL text values (`String`/`Nullable(String)`) to preserve source formatting and NULL distinctions. Each table is staged and reconciled in a temporary ClickHouse database, then published per table through exchange/rename. An extraction transaction, insert or validation failure keeps the existing raw table. Publication is atomic per table, not across all 12 tables; run extraction and dbt sequentially and withhold downstream release until the dbt build completes.
+## Time-range load
 
-The event-time watermark is not CDC. Changes older than a table's watermark, late arrivals before that boundary and source deletions are not detected automatically. A row reread at the boundary is merged by its OLTP primary key. The operational report at `reports/raw_extraction.json` records each table's watermark, rows read, new/read-again keys, before/after raw counts and reconciliation status. A reread count is not a changed-row count.
+```bash
+uv run --locked inventory-dw-dss load raw --start 2023-01-01 --end 2023-01-31
+```
 
-`prepare_table()` constructs and validates one replacement; `publish()` exchanges/renames prepared tables; `rollback_publication()` reverses acknowledged operations; `extract_incremental()` owns connection, snapshot, writer lock, report and cleanup lifetime. Keep recovery behavior and raw schema checks together with these functions. See the [validation README](validation/README.md) for read-only lineage checks and [tests README](../../tests/README.md) for extraction failure regressions.
+Both endpoints are inclusive `YYYY-MM-DD` event dates. Transactions are read with `timestamp >= start midnight AND timestamp < midnight after end`, independently of current raw watermarks. Matching PKs update; existing rows outside the range stay present. A subsequent transform processes all retained raw history, not only this read window. All ten reference/header tables still refresh completely. An empty transaction range succeeds and preserves current transactions while refreshing references.
+
+Use explicit full/range commands for a deliberate replay of older records. Routine event-time loading does not automatically discover late records, changes before the watermark, backward-moved timestamps or source deletions. A range selects the source's current timestamp; it cannot identify a removed row.
+
+```bash
+uv run --locked inventory-dw-dss load raw --help
+```
+
+`--full` cannot be combined with dates. Missing/reversed/invalid date endpoints fail before a connection is opened. Batch size defaults internally to 20,000; operational users do not need to configure it.
+
+## Publication, reports and maintenance
+
+All PostgreSQL queries share one `REPEATABLE READ READ ONLY` snapshot and a session advisory lock serializes writers to the same raw destination. Raw columns retain canonical PostgreSQL text as `String`/`Nullable(String)`. Deltas, merged counts and PK uniqueness are validated in a temporary `_extract_*` database before publication.
+
+Existing tables publish by atomic exchange per table. Publication across all tables is not one transaction. A caught publication error reverses acknowledged steps; recovery tables are retained when an exchange result is ambiguous. Inspect the receipt and table names/UUIDs before retrying an ambiguous publication; do not blindly delete its work database.
+
+`reports/raw_extraction.json` records mode (`incremental`, `full` or `range`), selected dates, per-table watermark, read/new/reread counts, final raw counts and reconciliation/recovery status. Reread counts include changed and unchanged values. The report is replaced each run.
+
+[extraction.py](extraction.py) owns `load_raw()`, `prepare_table()`, publication and rollback. [cli.py](cli.py) owns scope validation and delegates `transform` to the installed dbt runner using repository project/profile paths. UOM version defaults to the fixed project variable; `--uom-version` selects another published version. Business calculations remain in dbt. [Tests](../../tests/README.md) cover the public CLI and disposable destination databases.
+
+Run raw loading and transformations sequentially. Release marts to DSS consumers only after the complete transform succeeds.

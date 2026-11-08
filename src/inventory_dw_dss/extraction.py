@@ -5,7 +5,7 @@ No CSV, pandas, bootstrap import, or write to OLTP is involved.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -53,7 +53,8 @@ def rollback_publication(client, raw_db: str, work_db: str, completed: list[tupl
         client.command(f'EXCHANGE TABLES {raw} AND {work}' if existed else f'RENAME TABLE {raw} TO {work}')
 
 
-def prepare_table(pg, client, raw_db, work_db, table, columns, keys, batch_size):
+def prepare_table(pg, client, raw_db, work_db, table, columns, keys, batch_size, *,
+                  full=False, start=None, end=None):
     """Read a bounded source window and prepare one reconciled replacement table."""
     raw = f'{identifier(raw_db)}.{identifier(table)}'
     target = f'{identifier(work_db)}.{identifier(table)}'
@@ -73,13 +74,18 @@ def prepare_table(pg, client, raw_db, work_db, table, columns, keys, batch_size)
         if previous_unique != previous_count:
             raise RuntimeError(f'Existing raw primary keys are not unique in {table}')
     watermark = None
-    if event_time and previous_count:
+    if event_time and previous_count and not full and start is None:
         watermark = client.query(f'SELECT maxOrNull(CAST({identifier(event_time)} AS DateTime64(6))) FROM {raw}').first_row[0]
         # PostgreSQL transaction columns represent wall-clock times without a timezone.
         watermark = watermark.replace(tzinfo=None)
     where = sql.SQL('')
     params = ()
-    if watermark is not None:
+    if event_time and start is not None:
+        where = sql.SQL(' WHERE {} >= %s AND {} < %s').format(
+            sql.Identifier(event_time), sql.Identifier(event_time))
+        params = (datetime.combine(start, datetime.min.time()),
+                  datetime.combine(end + timedelta(days=1), datetime.min.time()))
+    elif watermark is not None:
         where = sql.SQL(' WHERE {} >= %s').format(sql.Identifier(event_time))
         params = (watermark,)
     delta_table = f'delta_{table}' if event_time else table
@@ -116,7 +122,7 @@ def prepare_table(pg, client, raw_db, work_db, table, columns, keys, batch_size)
     else:
         final_count, final_unique = delta_count, delta_unique
     return {
-        'mode': 'incremental' if event_time else 'refresh',
+        'mode': ('full' if full else 'range' if start is not None else 'incremental') if event_time else 'refresh',
         'watermark': watermark.isoformat(timespec='microseconds') if watermark else None,
         'watermark_column': event_time, 'selected_rows': source_count, 'rows_read': read_count,
         'new_keys': delta_count - overlap, 'reread_keys': overlap,
@@ -129,16 +135,27 @@ def prepare_table(pg, client, raw_db, work_db, table, columns, keys, batch_size)
     }, ready
 
 
-def extract_incremental(*, batch_size: int = 20000) -> dict:
+def load_raw(*, full: bool = False, start: date | None = None,
+             end: date | None = None, batch_size: int = 20000) -> dict:
     if batch_size < 1:
         raise ValueError('batch_size must be positive')
+    if full and (start is not None or end is not None):
+        raise ValueError('full cannot be combined with start/end')
+    if (start is None) != (end is None):
+        raise ValueError('provide both start and end')
+    if start is not None and start > end:
+        raise ValueError('start must be on or before end')
+    if end == date.max:
+        raise ValueError('end must be before 9999-12-31')
+    mode = 'full' if full else 'range' if start is not None else 'incremental'
     raw_db = os.environ.get('CLICKHOUSE_RAW_SCHEMA', 'raw')
     identifier(raw_db)
     if raw_db in {'system', 'information_schema', 'INFORMATION_SCHEMA', os.environ.get('CLICKHOUSE_DB', 'inventory_dw')}:
         raise ValueError('Raw database must be separate from system databases and the dbt destination')
     work_db = f'_extract_{uuid4().hex}'
     report_path = Path('reports/raw_extraction.json')
-    report = {'started_at': datetime.now(timezone.utc).isoformat(), 'mode': 'incremental',
+    report = {'started_at': datetime.now(timezone.utc).isoformat(), 'mode': mode,
+              'selection': {'start': start.isoformat() if start else None, 'end': end.isoformat() if end else None},
               'raw_database': raw_db, 'work_database': work_db, 'status': 'failed',
               'batch_size': batch_size, 'tables': {}}
     client = None
@@ -184,7 +201,7 @@ def extract_incremental(*, batch_size: int = 20000) -> dict:
                     if not keys:
                         raise RuntimeError(f'No verified primary key for oltp.{table}')
                     result, ready = prepare_table(pg, client, raw_db, work_db, table,
-                                                  columns, keys, batch_size)
+                                                  columns, keys, batch_size, full=full, start=start, end=end)
                     report['tables'][table] = result
                     if ready:
                         prepared.append(table)

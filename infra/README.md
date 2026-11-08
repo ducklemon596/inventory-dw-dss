@@ -16,13 +16,13 @@ Use the project name `inventory-dw-dss` consistently: named volumes hold the exi
 
 | Client setting | Default | Responsibility |
 |---|---|---|
-| `PGHOST`, `PGPORT` | `localhost`, `5433` | Host-side extraction/validators connect here |
+| `PGHOST`, `PGPORT` | `localhost`, `5433` | Host-side raw loading connects here |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | `inventory`, `inventory`, `inventory_local` | PostgreSQL source; Compose sets these server values directly |
 | `POSTGRES_PORT` | `5433` | Compose host port; export matching `PGPORT` if changed |
 | `CLICKHOUSE_HOST`, `CLICKHOUSE_HTTP_PORT` | `localhost`, `8123` | Host Python/dbt HTTP connection |
 | `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | `dbt`, `dbt_local` | Compose, Python and dbt credentials |
 | `CLICKHOUSE_RAW_SCHEMA` | `raw` | Extraction destination and dbt source schema |
-| `CLICKHOUSE_DB` | `inventory_dw` | dbt models and warehouse validators |
+| `CLICKHOUSE_DB` | `inventory_dw` | dbt destination database |
 
 Export environment variables before running host commands; Python does not automatically load `.env`. Compose uses its own environment interpolation. The dbt [profile](../transform/dbt/profiles.yml) defines `secure: false`, `verify: false` for local HTTP; use appropriate TLS settings when configuring a remote HTTPS service. Local credentials and exposed ports are development defaults, not a production deployment policy.
 
@@ -33,4 +33,4 @@ docker compose -p inventory-dw-dss -f infra/docker-compose.yml exec -T db psql -
 docker compose -p inventory-dw-dss -f infra/docker-compose.yml exec -T clickhouse clickhouse-client --user dbt --password dbt_local --query 'SHOW TABLES FROM inventory_dw'
 ```
 
-OLTP initialization is explicit: [bootstrap](../src/inventory_dw_dss/oltp_ingestion/README.md). ClickHouse raw is published by [extraction](../src/inventory_dw_dss/README.md); dbt creates the analytical relations. Health checks verify server readiness, not source completeness or analytical correctness.
+OLTP initialization is explicit: [PostgreSQL load](../src/inventory_dw_dss/oltp_ingestion/README.md). ClickHouse raw is published by [extraction](../src/inventory_dw_dss/README.md); dbt creates the analytical relations. Health checks verify server readiness, not source completeness or analytical correctness.

@@ -8,7 +8,6 @@ models:
       - name: manufacturer_id
         description: Identifier of the product manufacturer.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -16,7 +15,6 @@ models:
       - name: manufacturer_name
         description: Name of the product manufacturer.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
           - unique
@@ -28,7 +26,6 @@ models:
       - name: drug_class_id
         description: Identifier of the drug classification.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -36,7 +33,6 @@ models:
       - name: drug_class_name
         description: Name of the drug classification.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
           - unique
@@ -48,7 +44,6 @@ models:
       - name: category_id
         description: Identifier of the product category.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -56,7 +51,6 @@ models:
       - name: category_name
         description: Name of the product category.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
           - unique
@@ -68,15 +62,14 @@ models:
       - name: product_id
         description: Identifier of the product.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
 
       - name: product_code
-        description: Code used by the pharmacy to identify the product.
+        description: >-
+          Product code assigned by the pharmacy (DrugCode); used to match product-specific unit conversion decisions.
         data_type: String
-
         data_tests:
           - not_null
           - unique
@@ -88,7 +81,6 @@ models:
       - name: manufacturer_id
         description: Identifier of the product manufacturer.
         data_type: Nullable(UInt32)
-
         data_tests:
           - relationships:
               arguments:
@@ -98,7 +90,6 @@ models:
       - name: drug_class_id
         description: Identifier of the drug classification.
         data_type: Nullable(UInt32)
-
         data_tests:
           - relationships:
               arguments:
@@ -108,7 +99,6 @@ models:
       - name: category_id
         description: Identifier of the product category.
         data_type: Nullable(UInt32)
-
         data_tests:
           - relationships:
               arguments:
@@ -122,7 +112,6 @@ models:
       - name: warehouse_id
         description: Identifier of the storage location.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -130,7 +119,6 @@ models:
       - name: warehouse_name
         description: Name of the storage location.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
           - unique
@@ -142,7 +130,6 @@ models:
       - name: unit_id
         description: Identifier of the unit of measure.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -150,7 +137,6 @@ models:
       - name: unit_code
         description: Name or abbreviation of a unit of measure.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
           - unique
@@ -162,7 +148,6 @@ models:
       - name: cashier_id
         description: Identifier of the cashier who recorded the sale.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -170,19 +155,18 @@ models:
       - name: cashier_code
         description: Code identifying the cashier in the pharmacy system.
         data_type: String
-
         data_tests:
           - not_null
           - unique
 
   - name: stg_sales_invoices
-    description: Sales invoices grouping the items recorded in a sale.
+    description: >-
+      Sales invoice codes grouping recorded source lines; event time, payment and amounts remain on the lines.
 
     columns:
       - name: sales_invoice_id
         description: Identifier of the sales invoice.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -190,7 +174,6 @@ models:
       - name: sales_invoice_number
         description: Number assigned to the sales invoice.
         data_type: String
-
         data_tests:
           - not_null
           - unique
@@ -202,7 +185,6 @@ models:
       - name: product_batch_id
         description: Identifier of the product batch.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -210,7 +192,6 @@ models:
       - name: product_id
         description: Identifier of the product.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -233,29 +214,28 @@ models:
       - name: sales_invoice_line_id
         description: Identifier of an item entry on a sales invoice.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
 
       - name: dataset_name
-        description: Name of the dataset containing the transaction.
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
 
       - name: dataset_row_number
-        description: Original record number within the transaction dataset.
+        description: >-
+          Original row number within the source dataset. Defines export order, with gaps permitted within an individual
+          product ledger.
         data_type: UInt32
-
         data_tests:
           - not_null
 
       - name: sales_invoice_id
         description: Identifier of the sales invoice.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -266,7 +246,6 @@ models:
       - name: product_id
         description: Identifier of the product.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -277,7 +256,6 @@ models:
       - name: unit_id
         description: Identifier of the unit used for the quantity sold.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -288,7 +266,6 @@ models:
       - name: cashier_id
         description: Identifier of the cashier who recorded the sale.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -299,7 +276,6 @@ models:
       - name: sold_at
         description: Date and time the sale was recorded.
         data_type: DateTime64(6)
-
         data_tests:
           - not_null
 
@@ -310,7 +286,6 @@ models:
       - name: product_name
         description: Product name recorded with the transaction.
         data_type: String
-
         data_tests:
           - not_null
 
@@ -331,16 +306,15 @@ models:
         data_type: Nullable(String)
 
       - name: sold_quantity
-        description: Quantity of the product sold.
+        description: Recorded signed sales quantity in unit_id, before any stock-unit conversion.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
       - name: unit_price
-        description: Selling price per unit of the product.
+        description: Recorded selling price per original sales unit; the monetary denomination follows the source
+          record.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
@@ -349,49 +323,59 @@ models:
         data_type: LowCardinality(Nullable(String))
 
       - name: discount_percentage
-        description: Discount percentage recorded with the sales item.
+        description: Discount percentage recorded with the sales line, on a scale from 0 to 100.
         data_type: Nullable(Decimal(9, 4))
 
       - name: discount_amount
-        description: Discount amount recorded with the sales item.
+        description: Discount amount recorded with the sales line, in the source monetary denomination.
         data_type: Nullable(Decimal(18, 6))
 
       - name: service_fee_amount
-        description: Service fee recorded with the sales item.
+        description: >-
+          Service fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
         data_type: Nullable(Decimal(18, 6))
 
       - name: packaging_fee_amount
-        description: Packaging fee recorded with the sales item.
+        description: >-
+          Packaging fee recorded with this sales line, in the source monetary denomination; invoice allocation is
+          unverified.
         data_type: Nullable(Decimal(18, 6))
 
       - name: subtotal_amount
-        description: Subtotal recorded with the sales item before subsequent adjustments.
+        description: >-
+          Subtotal supplied with the sales line, in the source monetary denomination; preserved rather than recalculated.
         data_type: Nullable(Decimal(18, 6))
 
       - name: invoice_discount_percentage
-        description: Invoice discount percentage recorded with the sales item.
+        description: >-
+          Invoice discount percentage recorded with this sales line, on a scale from 0 to 100; retained without
+          invoice-level allocation.
         data_type: Nullable(Decimal(9, 4))
 
       - name: promotional_discount_percentage
-        description: Promotional discount percentage recorded with the sales item.
+        description: Promotion discount percentage recorded with the sales line, on a scale from 0 to 100.
         data_type: Nullable(Decimal(9, 4))
 
       - name: tax_percentage
-        description: Tax percentage recorded with the sales item.
+        description: Tax percentage recorded with the sales line, on a scale from 0 to 100.
         data_type: Nullable(Decimal(9, 4))
 
       - name: additional_fee_amount
-        description: Additional fee recorded with the sales item.
+        description: >-
+          Additional fee recorded with this sales line, in the source monetary denomination; invoice allocation
+          is unverified.
         data_type: Nullable(Decimal(18, 6))
 
       - name: total_amount
-        description: Final amount recorded with the sales item.
+        description: >-
+          Final amount supplied with the sales line, in the source monetary denomination; preserved rather than
+          recalculated.
         data_type: Nullable(Decimal(18, 6))
 
       - name: payment_method
         description: Payment method recorded with the sale.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:
@@ -407,7 +391,6 @@ models:
       - name: membership_status
         description: Membership status recorded with the sale.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:
@@ -420,13 +403,12 @@ models:
         data_type: Nullable(UInt32)
 
       - name: shift_date
-        description: Business date of the sales shift.
+        description: Date recorded in the shift designation, which may differ from the sales event date.
         data_type: Nullable(Date32)
 
       - name: shift_period
         description: Period of the day assigned to the sales shift.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:
@@ -443,13 +425,12 @@ models:
         data_type: Nullable(UInt8)
 
   - name: stg_inventory_documents
-    description: Inventory documents associated with stock movements.
+    description: Inventory document codes grouping recorded movements, potentially across dates and warehouses.
 
     columns:
       - name: inventory_document_id
         description: Identifier of the inventory document.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
@@ -457,42 +438,41 @@ models:
       - name: inventory_document_number
         description: Number assigned to the inventory document.
         data_type: String
-
         data_tests:
           - not_null
           - unique
 
   - name: stg_inventory_movements
-    description: Individual stock movements for a product at a storage location, including quantities before and
-      after the movement.
+    description: >-
+      Individual stock movements for a product at a storage location, including quantities before and after the
+      movement.
 
     columns:
       - name: inventory_movement_id
         description: Identifier of the inventory movement.
         data_type: UInt32
-
         data_tests:
           - not_null
           - unique
 
       - name: dataset_name
-        description: Name of the dataset containing the transaction.
+        description: >-
+          Source dataset containing the recorded transaction; scopes the original record number and inventory ledger.
         data_type: LowCardinality(String)
-
         data_tests:
           - not_null
 
       - name: dataset_row_number
-        description: Original record number within the transaction dataset.
+        description: >-
+          Original row number within the source dataset. Defines export order, with gaps permitted within an individual
+          product ledger.
         data_type: UInt32
-
         data_tests:
           - not_null
 
       - name: inventory_document_id
         description: Identifier of the inventory document.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -503,7 +483,6 @@ models:
       - name: product_id
         description: Identifier of the product.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -514,7 +493,6 @@ models:
       - name: warehouse_id
         description: Identifier of the storage location.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -525,14 +503,12 @@ models:
       - name: movement_at
         description: Date and time the stock movement was recorded.
         data_type: DateTime64(6)
-
         data_tests:
           - not_null
 
       - name: product_name
         description: Product name recorded with the transaction.
         data_type: String
-
         data_tests:
           - not_null
 
@@ -547,7 +523,6 @@ models:
       - name: consignment_status
         description: Product ownership or consignment classification recorded with the movement.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:
@@ -558,7 +533,6 @@ models:
       - name: product_status
         description: Product status recorded with the inventory movement.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:
@@ -570,37 +544,38 @@ models:
         data_type: Nullable(String)
 
       - name: opening_stock_quantity
-        description: Stock quantity recorded before the movement.
+        description: >-
+          Recorded stock quantity immediately before the movement, in opening_stock_unit_id; negative values remain
+          recorded observations.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
       - name: received_quantity
-        description: Quantity received in the movement.
+        description: >-
+          Quantity recorded as inbound in received_unit_id; its direction comes from this field rather than transaction_type.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
       - name: issued_quantity
-        description: Quantity issued in the movement.
+        description: >-
+          Quantity recorded as outbound in issued_unit_id; its direction comes from this field rather than transaction_type.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
       - name: closing_stock_quantity
-        description: Stock quantity recorded after the movement.
+        description: >-
+          Recorded stock quantity immediately after the movement, in closing_stock_unit_id; negative values remain
+          recorded observations.
         data_type: Decimal(18, 6)
-
         data_tests:
           - not_null
 
       - name: opening_stock_unit_id
-        description: Unit used for the stock quantity before the movement.
+        description: Identifier of the unit in which the opening stock quantity was recorded.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -609,9 +584,8 @@ models:
                 field: unit_id
 
       - name: received_unit_id
-        description: Unit used for the received quantity.
+        description: Identifier of the unit in which the inbound quantity was recorded.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -620,9 +594,8 @@ models:
                 field: unit_id
 
       - name: issued_unit_id
-        description: Unit used for the issued quantity.
+        description: Identifier of the unit in which the outbound quantity was recorded.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -631,9 +604,8 @@ models:
                 field: unit_id
 
       - name: closing_stock_unit_id
-        description: Unit used for the stock quantity after the movement.
+        description: Identifier of the unit in which the closing stock quantity was recorded.
         data_type: UInt32
-
         data_tests:
           - not_null
           - relationships:
@@ -644,7 +616,6 @@ models:
       - name: transaction_type
         description: Type of inventory transaction.
         data_type: LowCardinality(Nullable(String))
-
         data_tests:
           - accepted_values:
               arguments:

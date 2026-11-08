@@ -1,6 +1,11 @@
-{{ config(materialized='table', engine='MergeTree()', order_by='warehouse_id') }}
+-- Inventory locations remain separate; source sales have no verified warehouse assignment.
+{{ config(
+    materialized='table',
+    engine='MergeTree()',
+    order_by='warehouse_id'
+) }}
 
-select
+SELECT
     warehouse_id,
     warehouse_name
-from {{ ref('stg_warehouses') }}
+FROM {{ ref('stg_warehouses') }}

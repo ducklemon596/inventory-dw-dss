@@ -1,13 +1,14 @@
-with cleaned as (
-    select
-        {{ stg_text('cashier_id', []) }} as cashier_id,
+-- Preserve the pseudonymous cashier code separately from its numeric identity.
+WITH cleaned AS (
+    SELECT
+        {{ stg_text('cashier_id', []) }} AS cashier_id,
 
-        {{ stg_text('source_code', []) }} as source_code
-    from {{ source('raw', 'cashier') }}
+        {{ stg_text('source_code', []) }} AS source_code
+    FROM {{ source('raw', 'cashier') }}
 )
 
-select
-    {{ stg_integer('cashier_id', 'UInt32', positive=true) }} as cashier_id,
+SELECT
+    {{ stg_integer('cashier_id', 'UInt32', positive=true) }} AS cashier_id,
 
-    CAST(source_code AS String) as cashier_code
-from cleaned
+    CAST(source_code AS String) AS cashier_code
+FROM cleaned

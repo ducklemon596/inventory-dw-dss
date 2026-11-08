@@ -1,8 +1,11 @@
 -- One original sales line; approved quantities and unresolved NULLs pass through unchanged.
-{{ config(materialized='table', engine='MergeTree()',
-          order_by='(dataset_name, product_id, sold_date, sales_invoice_line_id)') }}
+{{ config(
+    materialized='table',
+    engine='MergeTree()',
+    order_by='(dataset_name, product_id, sold_date, sales_invoice_line_id)'
+) }}
 
-select
+SELECT
     sales_invoice_line_id,
     dataset_name,
     dataset_row_number,
@@ -14,6 +17,7 @@ select
     unit_code,
     cashier_id,
     cashier_code,
+
     sold_at,
     sold_date,
     shift_label,
@@ -24,10 +28,12 @@ select
     manufacturer_name,
     drug_class_name,
     category_name,
+
     product_batch_id,
     product_batch_label,
     product_batch_number,
     expiration_date,
+
     sold_quantity,
     unit_price,
     price_tier_label,
@@ -45,6 +51,7 @@ select
     payment_method,
     document_print_count,
     membership_status,
+
     verified_stock_unit_id,
     verified_stock_unit_code,
     mapping_tier,
@@ -56,8 +63,10 @@ select
     mapping_price_check_within_15pct,
     mapping_evidence_source,
     mapping_stock_unit_code,
+
     mapping_version,
+
     conversion_status,
     applied_conversion_factor,
     stock_unit_qty
-from {{ ref('int_sales_quantity_converted') }}
+FROM {{ ref('int_sales_quantity_converted') }}

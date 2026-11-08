@@ -1,31 +1,19 @@
-# Recorded sales Fact
+# Recorded sales fact
 
-This fact is the primary sales interface for DSS consumers. It is neither verified demand nor net sales and has no verified sales warehouse relationship. [Data semantics](../../../../../docs/data-semantics.md) explains supported aggregation; [_sales.yml](_sales.yml) lists all 57 fields and typed tests.
+[fct_sales_line.sql](fct_sales_line.sql) publishes one row per `sales_invoice_line_id`, with alternate lineage key `(dataset_name, dataset_row_number)`. Its only input is `int_sales_quantity_converted`. The full output contract is in [_sales.yml](_sales.yml).
+
+The model explicitly projects all 57 input columns in the same order and types. It adds no calculation or dimension join. Original quantities, recorded monetary fields, optional batch/shift descriptions, conversion status, selected version, applied factor and evidence remain together on each line. Identity/approved quantities are retained; unresolved conversion remains NULL.
+
+Consumers join `dim_product` by `product_id`, `dim_unit` by the original or verified unit role, and `dim_date` by `sold_date = calendar_date`. Invoice and cashier remain line descriptors. There is no warehouse FK and no downstream dbt model configured; DSS models can depend on this fact through `ref()`.
+
+For example, a line recording `2 Box` retains that original quantity/unit even when an approved mapping also provides 20 Tab. An unresolved mapping keeps the original sale usable while exposing a missing converted quantity. [Sales Intermediate](../../intermediate/sales/README.md) owns the conversion rules; [data semantics](../../../../../docs/data-semantics.md) explains aggregation and monetary scope.
+
+Run from the repository root:
 
 ```bash
-uv run --locked dbt build --select +fct_sales_line dim_product dim_unit dim_date --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+uv run --locked inventory-dw-dss transform --select +fct_sales_line dim_product dim_unit dim_date
 ```
 
-### Model: `fct_sales_line`
+For existing relations, add `--test` and select `fct_sales_line`. Existing tests check all 57 values against the upstream model, exact schema, source grain, dimensional relationships/join cardinality and UOM semantics. The native fixture includes signed quantities, zero amounts and conversion outcomes; [mart regression](../../../../../tests/marts/README.md) checks that contract violations are rejected.
 
-**Purpose:** Publish every recorded sales line and its governed conversion result as a stable table.
-
-**Grain:** One sales_invoice_line_id; alternate unique (dataset_name,dataset_row_number). Materialization: **table**.
-
-**Inputs:** [int_sales_quantity_converted](../../intermediate/sales/int_sales_quantity_converted.sql).
-
-**Main logic:**
-
-1. Read int_sales_quantity_converted with the selected mapping version.
-2. Explicitly project all 57 upstream columns without JOIN, filtering, aggregation or recalculation.
-3. Write a full MergeTree replacement sorted by dataset/product/sold date/sales line ID.
-
-**Important columns:** Original quantity/unit, all recorded prices/discounts/fees/percentages, line/batch/invoice/cashier descriptors, product/date IDs, verified stock unit, conversion status/factor/quantity and mapping provenance.
-
-**Output:** DSS queries and analytical joins; no downstream SQL model is configured.
-
-**Business rules:** FKs: product_id → dim_product, sold_date → dim_date, unit_id and nullable verified_stock_unit_id → dim_unit. No warehouse FK. Sum original quantities only within compatible product/unit scope; converted sums must expose unresolved coverage. Percentages are not additive; fees are not certified invoice totals.
-
-**How to modify it safely:** Keep all 57 names/order/types and NULLs; add new analytical outputs separately when possible. A projection change requires upstream/YAML/schema/preservation updates and regression; do not infer demand or alter financial formulas.
-
-**Tests:** Grain/source-key uniqueness, preserves_source_rows, matches_declared_schema, all FK roles, dimensional_join_cardinality, sales_fact_semantics, native all-status fixture and Python marts failure tests. Use the selected-model command in [dbt execution](../../../README.md) or the test instructions at the start of this README. Full column types and declared tests: [_sales.yml](_sales.yml).
+Edit a reusable calculation in Intermediate first. If a reviewed requirement changes the fact projection, update its SQL, YAML and source-preservation/schema tests together, then rebuild affected parents and consumers. Source changes to stock-unit evidence or mapping version can also invalidate persisted sales results.

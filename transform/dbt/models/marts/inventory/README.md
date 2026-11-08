@@ -1,64 +1,33 @@
-# Inventory Facts
+# Inventory facts
 
-These tables expose recorded flows and **observed** balances. They do not certify physical/available inventory or create unobserved dates. Full-rebuild tables depend on the validated ledger/segment chain. [_inventory.yml](_inventory.yml) gives every field and test.
+The two full-rebuild MergeTree tables expose recorded movements and daily closing observations. [_inventory.yml](_inventory.yml) is the field/type/test reference. [Inventory Intermediate](../../intermediate/inventory/README.md) owns source ordering, continuity gaps and segment reconstruction.
+
+## fct_inventory_movement
+
+[SQL](fct_inventory_movement.sql) projects `int_inventory_segments` at one row per `inventory_movement_id`, retaining alternate lineage key `(dataset_name, dataset_row_number)`. It explicitly selects 36 fields: transaction/source identities, event/product/location, recorded labels and quantities, four unit roles, receipt-minus-issue delta, segment membership and quality flags.
+
+The fact preserves source flows and balances. Continuity gaps remain diagnostic; they are not added to receipts or issues. All movements survive, including RETURN, UNKNOWN and negative closing observations. Its direct model consumer is `fct_inventory_daily_observed`.
+
+Analytical joins use `dim_product`, `dim_warehouse`, four roles of `dim_unit` and `dim_date` through `movement_date`. Fact SQL itself does not join dimensions. Existing source-preservation, balance, dimensional cardinality and relationship tests check that each source movement remains represented once.
+
+## fct_inventory_daily_observed
+
+[SQL](fct_inventory_daily_observed.sql) reads the movement fact at `(dataset_name, product_id, warehouse_id, observation_date)` grain. `observations` identifies the latest event timestamp within a day for ambiguity diagnostics. `daily` aggregates all movement flows and selects one complete final observation tuple using the maximum source row number.
+
+Its 21 fields include the daily keys; selected closing quantity/unit/movement/time/segment; first/last source sequence; received/issued/delta sums; movement/gap/segment/unit counts; and discontinuity, negative-closing and latest-time ambiguity flags. Selected closing fields come from the same source row. Unobserved dates remain absent.
+
+Consumers join product, warehouse, closing-stock unit and calendar date dimensions. No downstream dbt model is currently configured. For example, same-day source rows 10 and 11 closing at 12 and 10 produce a daily observed closing of 10, with row 11's identity/time/unit/segment. Both movements contribute to flows. Equal latest timestamps with different closings set the ambiguity flag; selection still follows source sequence.
+
+Daily closing is a balance, so adding it across dates is not a stock measure. Missing dates are not zero stock, and observed closing does not certify physical or available stock. Existing daily reconciliation/quality, exact grain, relationships and join-cardinality tests verify these rules, with a native tied-time fixture.
+
+## Run and modify
+
+From the repository root:
 
 ```bash
-uv run --locked dbt build --select +fct_inventory_daily_observed dim_product dim_warehouse dim_unit dim_date --project-dir transform/dbt --profiles-dir transform/dbt --vars '{"uom_mapping_version":"uom_mapping_v2_2026-11-08"}'
+uv run --locked inventory-dw-dss transform --select +fct_inventory_daily_observed dim_product dim_warehouse dim_unit dim_date
 ```
 
-Use the full build to include diagnostics and other business branches. See [data meanings](../../../../../docs/data-semantics.md) and [historical validation](../../../../../docs/data-semantics.md).
+This selects the inventory ancestors and logical dimension roles. Use the complete build to include sales and diagnostics for acceptance; inventory unit evidence also influences sales conversion. The [dbt guide](../../../README.md) explains testing existing relations and selecting changed descendants.
 
-### Model: `fct_inventory_movement`
-
-**Purpose:** Publish source stock movements with segment membership and quality diagnostics.
-
-**Grain:** One inventory_movement_id; alternate unique dataset/source row. Materialization: **table**.
-
-**Inputs:** [int_inventory_segments](../../intermediate/inventory/int_inventory_segments.sql).
-
-**Main logic:**
-
-1. Read all reconstructed segment rows.
-2. Explicitly retain the 36 source/lineage/quantity/segment/diagnostic fields required by the fact.
-3. Fully rebuild, sorted by dataset/product/warehouse/movement date/source sequence.
-
-**Important columns:** Product/warehouse/date and four unit-role IDs; opening/received/issued/closing quantities; `recorded_delta_qty`, source row, segment ID/start, continuity/negative/UNKNOWN flags.
-
-**Output:** `fct_inventory_daily_observed`
-
-**Business rules:** Product, warehouse, movement_date and all unit roles reference the conformed dimensions. Only received/issued/delta are additive flows in compatible product/unit scopes. Opening/closing are balances, not flow measures. Preserve RETURN/UNKNOWN/negative observations.
-
-**How to modify it safely:** Keep one row per source movement and exact signed flows. Changing segment annotations requires rebuilding inventory ancestors; do not add balance repair or sales joins.
-
-**Tests:** PK/source-grain uniqueness, preservation against staging, declared column types, all FKs, dimensional JOIN cardinality, balance and historical reconstruction regressions. Use the selected-model command in [dbt execution](../../../README.md) or the test instructions at the start of this README. Full column types and declared tests: [_inventory.yml](_inventory.yml).
-
-### Model: `fct_inventory_daily_observed`
-
-**Purpose:** Summarize each observed day and select one coherent final stock observation.
-
-**Grain:** One (dataset_name,product_id,warehouse_id,observation_date). Materialization: **table**.
-
-**Inputs:** [fct_inventory_movement](fct_inventory_movement.sql).
-
-**Main logic:**
-
-1. Compute the latest event timestamp within each observed day for ambiguity diagnostics.
-2. GROUP BY the daily grain; aggregate all received/issued/delta flows, counts, segment/unit diversity and discontinuities.
-3. Choose a complete tuple of movement ID/source sequence/time/closing/unit/segment using maximum source sequence.
-4. Expose the chosen observation plus negative/discontinuity/latest-timestamp ambiguity flags.
-
-**Important columns:** `observed_closing_quantity`, `stock_unit_id`, `last_inventory_movement_id`, `last_source_sequence`, `last_movement_at`, recorded daily flow sums, `movement_count`, discontinuity/ambiguity flags.
-
-**Output:** DSS queries and analytical joins; no downstream SQL model is configured.
-
-**Business rules:** FKs: product, warehouse, observation date and stock unit. No missing-date fill or carry-forward. Do not sum closing balances across dates; do not add opening/closing values from many movements. Latest timestamp is a quality check, not the ordering substitute.
-
-**How to modify it safely:** Keep argMax fields in one tuple so they come from the same row. Reconcile old/new date groups, exact flows, units and flags after any grouping/selection change.
-
-**Tests:** Daily unique grain, declared column types, all FKs/cardinality, inventory_daily_reconciliation and inventory_daily_quality, native tied-time/source-order fixture, read-only history/flow reconciliation. Use the selected-model command in [dbt execution](../../../README.md) or the test instructions at the start of this README. Full column types and declared tests: [_inventory.yml](_inventory.yml).
-
-#### Daily closing example
-
-Two same-day rows close at 12 (source sequence 10) and 10 (sequence 11). The daily closing is 10, with the second row's ID, time, unit and segment. Received/issued totals include both movements. The next day's closing is another balance; adding it to 10 is not a stock measure. If both rows tie at the latest timestamp with different closings, selection still follows source order and ambiguity is flagged.
-
-Inventory YAML declares column types, but the reusable `matches_declared_schema` test is currently attached to Dimensions and the sales Fact only. Inventory acceptance relies on its existing preservation, arithmetic, grain, relationship and observation tests; this handover does not add tests or change those contracts.
+Keep one movement per source ID, exact quantity arithmetic and complete-tuple daily selection. A source-order, segment or grouping change affects persisted inventory outputs and must pass predecessor, anchor, reconstruction and daily tests together. Full business interpretation is in [data semantics](../../../../../docs/data-semantics.md).

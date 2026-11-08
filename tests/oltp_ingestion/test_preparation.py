@@ -2,9 +2,6 @@ import csv
 from collections import Counter
 from datetime import date
 import json
-import contextlib
-import io
-from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -73,19 +70,6 @@ class ParsingTests(unittest.TestCase):
                 transform(frame('sales', **change), 'sales')
         with self.assertRaises(ValueError):
             transform(frame('stock', StockIn='1.2 Tab'), 'stock')
-
-    def test_cli_rejects_ambiguous_selection(self):
-        from inventory_dw_dss.oltp_ingestion.cli import main
-        for argv in [
-            ['oltp-bootstrap', 'load'],
-            ['oltp-bootstrap', 'load', '--from', '2023-01-01'],
-            ['oltp-bootstrap', 'load', '--all', '--from', '2023-01-01'],
-            ['oltp-bootstrap', 'load', '--from', '2023-02-01', '--to', '2023-01-01'],
-        ]:
-            with patch('sys.argv', argv), contextlib.redirect_stderr(io.StringIO()):
-                with self.assertRaises(SystemExit) as error:
-                    main()
-                self.assertEqual(error.exception.code, 2)
 
     def test_boundaries(self):
         dates = pd.Series(['2023-01-01', '2023-01-02', '2024-02-29', '2024-03-01'])

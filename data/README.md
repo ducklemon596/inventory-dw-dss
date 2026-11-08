@@ -4,14 +4,8 @@
 - `raw/stock_raw.csv`: 804,027 source stock rows, 15 columns.
 - `processed/<interval>/`: generated sales/stock partitions and checksum manifest, ignored by Git.
 
-Raw data is preserved unchanged. Codes and RowNumber must remain stable for idempotent loading. Preparation preserves raw columns and adds parsed fields; it does not rewrite the inputs. Prepared datasets can be reproduced with:
-
-```bash
-uv run --group bootstrap inventory-dw-dss bootstrap prepare --interval 1mo
-```
-
-The loader supports `1d`, `3d`, `1w` and `1mo`, dataset selection and inclusive date ranges. See [ingestion instructions](../src/inventory_dw_dss/oltp_ingestion/README.md) and [source data dictionary](../docs/source-system.md).
+Raw files are preserved unchanged. The [PostgreSQL command](../src/inventory_dw_dss/oltp_ingestion/README.md) automatically prepares monthly partitions when needed, preserving source codes, RowNumber and all raw columns. Choose full load or inclusive event dates through that command; operational users do not run preparation separately.
 
 CSV files are upstream ingestion inputs, not operational DW sources. Once OLTP is populated, DW extraction reads PostgreSQL without a runtime dependency on this directory. Generated load receipts live in `reports/oltp_ingestion/`, outside the datasets.
 
-`reference/` contains the export passport, immutable pair-level UOM decisions and earlier coverage-only evidence. These serve different roles: the pair-level approved decisions form the governed dbt seed; the coverage-only summary cannot authorize a conversion. None is an extraction input. See [reference provenance](reference/README.md). Validators read original/prepared files as evidence and do not regenerate them.
+`reference/` contains immutable pair-level UOM decisions used by the governed dbt seed, an earlier coverage-only summary that cannot authorize conversions, and an archived export passport retained as research provenance. Only the governed mapping snapshots feed transformations; the passport is not a runtime input. See [reference provenance](reference/README.md).
