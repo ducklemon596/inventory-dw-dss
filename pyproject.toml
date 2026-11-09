@@ -16,6 +16,16 @@ dependencies = [
 
 [dependency-groups]
 bootstrap = ["pandas>=3.1.1,<4"]
+dev = ["pytest>=8,<10"]
+
+[project.optional-dependencies]
+mms = [
+    "duckdb>=1.4,<2",
+    "pandas>=2.2,<4",
+    "scikit-learn>=1.7,<2",
+    "joblib>=1.4,<2",
+]
+ui = ["inventory-dw-dss[mms]", "streamlit>=1.40,<2"]
 
 [project.scripts]
 inventory-dw-dss = "inventory_dw_dss.cli:main"

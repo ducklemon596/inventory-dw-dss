@@ -1,6 +1,6 @@
 # DSS handover
 
-The current consumer interface is the ClickHouse star schema: four dimensions and three facts. The DSS application, forecasting and replenishment features are not implemented. Use the [data model](data-model.md) for grains and relationships and [data semantics](data-semantics.md) before interpreting measures.
+The current warehouse consumer interface is the ClickHouse star schema: four dimensions and three facts. A separate [MMS backend and Streamlit demo](../src/inventory_dw_dss/mms/README.md) now supplies forecasting, risk inference, replenishment scenarios, evaluation and decision tracking. Production integration requires the [verified normalized export contract](mms-data-contract.md) and original HistGB bundle; the included demo is synthetic. Use the [data model](data-model.md) for grains and relationships and [data semantics](data-semantics.md) before interpreting measures.
 
 ## Current analytical interfaces
 

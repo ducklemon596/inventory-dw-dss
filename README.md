@@ -11,6 +11,7 @@ Read [architecture](docs/architecture.md), [source/data model](docs/data-model.m
 | Load PostgreSQL from the source export | [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md) | Full or inclusive date range; preparation is automatic |
 | Load ClickHouse raw from PostgreSQL | [Raw loader](src/inventory_dw_dss/README.md) | Incremental by default, explicit full or inclusive date range |
 | Build marts and run tests | [dbt transformations](transform/dbt/README.md) | All models, selected layer/model, or tests only |
+| Run MMS scenarios, evaluation and decision tracking | [MMS backend and Streamlit](src/inventory_dw_dss/mms/README.md) | Synthetic demo or verified normalized export + approved artifact |
 
 ## Source CSV files (optional PostgreSQL initialization)
 
@@ -62,4 +63,4 @@ UI preferences and sessions stay in the container; recreating it resets them. Da
 
 ## Consumer boundary
 
-The warehouse includes four conformed dimensions and three facts, with preserved sales lines, recorded inventory movements and observed daily balances. Sales have no verified warehouse assignment or completion/cancellation status. Unsupported conversion stays missing; missing days are not zero stock or demand. DSS forecasting and recommendations are not implemented. See [semantics](docs/data-semantics.md) before building consumer calculations.
+The warehouse includes four conformed dimensions and three facts, with preserved sales lines, recorded inventory movements and observed daily balances. Sales have no verified warehouse assignment or completion/cancellation status. Unsupported conversion stays missing; missing days are not zero stock or demand. The separate [MMS backend](src/inventory_dw_dss/mms/README.md) supplies forecasting, risk inference and decision scenarios; production use requires an approved [normalized data contract](docs/mms-data-contract.md) and trained artifact. See [semantics](docs/data-semantics.md) before building consumer calculations.
