@@ -54,3 +54,42 @@ def test_sqlite_path_error_is_rendered_without_crashing(tmp_path, monkeypatch):
     app = AppTest.from_file(str(Path(__file__).parents[2] / "src/inventory_dw_dss/mms/ui.py"), default_timeout=20).run()
     assert not app.exception
     assert any("Database" in error.value for error in app.error)
+
+
+def test_team_application_can_embed_mms_without_reconfiguring_page(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMS_DECISIONS_PATH", str(tmp_path / "embedded.sqlite"))
+    monkeypatch.setenv("MMS_DATA_SOURCE", "demo")
+    script = "import streamlit as st\nst.set_page_config(page_title='Team DSS')\nfrom inventory_dw_dss.mms.ui import render\nrender(configure_page=False)"
+    app = AppTest.from_string(script, default_timeout=20).run()
+    assert not app.exception
+    app.button(key="run_scenarios").click().run()
+    assert not app.exception and len(app.dataframe) >= 4
+
+
+def test_explicit_production_mode_missing_release_never_displays_demo(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE", "clickhouse")
+    monkeypatch.delenv("MMS_RELEASE_ID", raising=False)
+    app = AppTest.from_file(str(Path(__file__).parents[2] / "src/inventory_dw_dss/mms/ui.py"), default_timeout=20).run()
+    assert not app.exception
+    assert any("MMS_RELEASE_ID" in msg.value for msg in app.error)
+    assert not any("SYNTHETIC" in msg.value for msg in app.warning)
+
+
+def test_runtime_switch_clears_results_and_manager_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"switch.sqlite"))
+    script = '''import streamlit as st
+from inventory_dw_dss.mms.runtime import MMSRuntime, SourceSettings
+from inventory_dw_dss.mms.demo import build_demo_service
+from inventory_dw_dss.mms.ui import render
+mode=st.selectbox("Runtime",["demo","duckdb"],key="host_runtime")
+render(application_runtime=MMSRuntime(build_demo_service(),SourceSettings(source=mode,duckdb_path="different-source.duckdb")))
+'''
+    app=AppTest.from_string(script,default_timeout=20).run()
+    app.button(key="run_scenarios").click().run()
+    assert not app.exception and len(app.dataframe)>=4
+    app.selectbox(key="action_0_B").set_value("edited")
+    app.selectbox(key="host_runtime").set_value("duckdb").run()
+    assert not app.exception
+    assert not app.dataframe
+    assert "comparison" not in app.session_state
+    assert not any(b.key=="save_decision" for b in app.button)

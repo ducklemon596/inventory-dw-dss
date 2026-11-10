@@ -1,52 +1,59 @@
 """Run: uv run --extra ui streamlit run src/inventory_dw_dss/mms/ui.py"""
-from dataclasses import replace
 import json
 import os
 from pathlib import Path
 import sqlite3
+import hashlib
 
 import duckdb
 import streamlit as st
 
 from inventory_dw_dss.mms.core.schemas import PROFILES, ScenarioComparison, ScenarioConfig, MMSValidationError, to_dict
-from inventory_dw_dss.mms.data.duckdb_adapter import DuckDBDataProvider
-from inventory_dw_dss.mms.demo import build_demo_service, demo_outcomes
-from inventory_dw_dss.mms.evaluation.backtesting import Backtester, OutcomeProvider
-from inventory_dw_dss.mms.models.histgb import HistGBRiskModel
-from inventory_dw_dss.mms.service import MMSService
+from inventory_dw_dss.mms.evaluation.backtesting import Backtester
+from inventory_dw_dss.mms.runtime import SourceSettings, build_runtime
 from inventory_dw_dss.mms.tracking.repository import DecisionRepository, ManagerAction
 
 
 @st.cache_resource
-def production_service(database, artifact, manifest):
-    return MMSService(DuckDBDataProvider(database), HistGBRiskModel.load(artifact, manifest))
+def configured_runtime(settings):
+    return build_runtime(settings)
 
 
-def runtime():
-    database = os.getenv("MMS_DUCKDB_PATH")
-    if database:
-        artifact, manifest = os.getenv("MMS_ARTIFACT_PATH"), os.getenv("MMS_MANIFEST_PATH")
-        if not artifact or not manifest:
-            raise MMSValidationError("Set MMS_ARTIFACT_PATH and MMS_MANIFEST_PATH for production inference")
-        return production_service(database, artifact, manifest), False
-    return build_demo_service(), True
+def reset_manager_inputs():
+    for key in list(st.session_state):
+        if key.startswith(("action_", "edit_", "note_")):
+            del st.session_state[key]
 
 
-def read_outcomes(demo):
-    if demo:
-        return demo_outcomes()
-    import duckdb
-    with duckdb.connect(os.environ["MMS_DUCKDB_PATH"], read_only=True) as connection:
-        return OutcomeProvider.from_duckdb(connection)
+def bind_runtime(active_runtime):
+    settings = active_runtime.settings
+    model = active_runtime.service.executor.risk_model
+    manifest = getattr(model,"manifest",{})
+    # Credentials are deliberately omitted from retained UI provenance.
+    identity = {name:getattr(settings,name) for name in ("source","duckdb_path","host","port",
+        "database","username","secure","release_id","artifact_path","manifest_path")}
+    identity.update(artifact_version=getattr(model,"version",None), artifact_sha256=manifest.get("sha256"),
+                    data_kind=manifest.get("data_kind"))
+    token=hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
+    if st.session_state.get("_mms_runtime_identity") != token:
+        st.session_state.pop("comparison",None)
+        st.session_state.pop("reopened_session",None)
+        reset_manager_inputs()
+        st.session_state["_mms_runtime_identity"]=token
 
 
-def render():
-    st.set_page_config(page_title="Inventory MMS", layout="wide")
+def render(configure_page=True, application_runtime=None):
+    if configure_page:
+        st.set_page_config(page_title="Inventory MMS", layout="wide")
     st.title("Inventory decision support")
     try:
-        service, demo = runtime()
+        active_runtime = application_runtime or configured_runtime(SourceSettings.from_env())
+        bind_runtime(active_runtime)
+        service, demo = active_runtime.service, active_runtime.is_demo
         if demo:
-            st.warning("SYNTHETIC DEMO — fixed scores, not trained HistGB predictions or experimental results.")
+            detail = ("fixed scores, not trained HistGB predictions" if active_runtime.settings.source == "demo"
+                      else "HistGB trained on generated data; not pharmacy research results")
+            st.warning(f"SYNTHETIC DEMO — {detail}.")
         st.caption("Review alerts and proposed units separately. Q is a unit budget; manager review is required.")
         with st.expander("Model catalog"):
             st.json(to_dict(service.list_models()))
@@ -71,9 +78,7 @@ def render():
             comparison = (service.compare_scenarios(active) if count > 1 else
                           ScenarioComparison((service.execute_scenario(active[0]),), ()))
             # Manager inputs belong to the exact run, even if SKU IDs are reused.
-            for key in list(st.session_state):
-                if key.startswith(("action_", "edit_", "note_")):
-                    del st.session_state[key]
+            reset_manager_inputs()
             st.session_state["comparison"] = comparison
         comparison = st.session_state.get("comparison")
         if comparison:
@@ -110,7 +115,7 @@ def render():
             evaluation_dates = st.text_input("Decision dates (comma separated)", str(result.config.analysis_date))
             horizon = st.selectbox("Outcome horizon days", [7, 14, 30])
             if st.button("Evaluate", key="evaluate"):
-                report = Backtester(service, read_outcomes(demo)).run(result.config,
+                report = Backtester(service, active_runtime.load_outcomes()).run(result.config,
                     [d.strip() for d in evaluation_dates.split(",")], horizon)
                 st.json(to_dict(report))
         st.subheader("Saved sessions")
@@ -120,7 +125,7 @@ def render():
             if st.button("Reopen session", key="reopen_session"):
                 st.session_state["reopened_session"] = repository().get_session(session_id)
             if st.button("Observe historical follow-up", key="followup"):
-                st.session_state["reopened_session"] = repository().add_followups(session_id, read_outcomes(demo))
+                st.session_state["reopened_session"] = repository().add_followups(session_id, active_runtime.load_outcomes())
             if st.session_state.get("reopened_session"):
                 st.subheader("Saved decision — exact configuration and versions")
                 st.json(st.session_state["reopened_session"])

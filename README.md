@@ -25,6 +25,11 @@ data/raw/
 
 Rename the downloaded files if necessary; preserve their contents, headers and `RowNumber` values. Both files are required for the [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md). Once PostgreSQL is populated, routine extraction and dbt transformations do not require these CSVs. Governed UOM reference files remain included in Git.
 
+The [MMS integration guide](docs/mms-production.md) records the verified v2
+download hashes and row counts, source-audit command, new model training and
+the trained simulation app. Raw source files are not automatically valid
+pharmacy-level available-stock snapshots.
+
 ## Start local services
 
 Requires Python 3.12+, `uv`, Docker and Compose. From the repository root:

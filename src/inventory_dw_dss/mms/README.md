@@ -5,6 +5,20 @@ historical metrics and SQLite decision tracking behind `MMSService`. Production
 requires a verified normalized export and the original trusted trained bundle;
 the included demo is wholly synthetic. No scenario action triggers ETL or dbt.
 
+New: [production integration and training guide](../../../docs/mms-production.md)
+documents the downloaded real source data, SELECT-only ClickHouse adapter,
+new HistGB training pipeline, NEW1–NEW7 simulation experiments, reference checks
+and an embeddable team UI. Create a fully trained local demonstration with:
+
+```powershell
+uv run --locked --extra ui inventory-mms bootstrap-demo --output reports/mms-trained-demo --seed 7
+uv run --locked --extra ui streamlit run reports/mms-trained-demo/app.py
+```
+
+This trains a new model on labelled simulation data; it does not claim to use
+the downloaded pharmacy CSVs as verified available-stock snapshots. Real source
+audit and production approval remain distinct.
+
 From the repository root (Python 3.12):
 
 ```powershell
