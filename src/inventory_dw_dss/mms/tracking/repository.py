@@ -46,7 +46,7 @@ class DecisionRepository:
         skus = {r.sku_id for r in result.review_list}
         action_map = {}
         for a in actions:
-            if a.sku_id not in skus or a.sku_id in action_map or a.action not in {"accepted", "rejected", "edited"}:
+            if a.sku_id not in skus or a.sku_id in action_map or a.action not in {"pending", "accepted", "rejected", "edited"}:
                 raise MMSValidationError("Unknown/duplicate SKU or unsupported manager action")
             if a.action == "edited" and (type(a.quantity) is not int or a.quantity < 0):
                 raise MMSValidationError("Edited quantity must be a nonnegative integer")

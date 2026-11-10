@@ -27,6 +27,8 @@ def test_streamlit_compare_save_reopen_and_parameter_changes(tmp_path, monkeypat
         monkeypatch.delenv(key, raising=False)
     app = AppTest.from_file(str(Path(__file__).parents[2] / "src/inventory_dw_dss/mms/ui.py"), default_timeout=20).run()
     assert not app.exception
+    assert app.title[0].value == "Lập kế hoạch tồn kho"
+    assert app.button(key="run_scenarios").label == "Chạy phương án"
     app.button(key="run_scenarios").click().run()
     assert not app.exception
     assert len(app.dataframe) >= 4  # independent Review/Order for two scenarios
@@ -34,10 +36,10 @@ def test_streamlit_compare_save_reopen_and_parameter_changes(tmp_path, monkeypat
     app.number_input(key="edit_0_B").set_value(3)
     app.button(key="save_decision").click().run()
     assert not app.exception
-    assert any("Saved" in msg.value for msg in app.success)
+    assert any("Đã lưu quyết định" in msg.value for msg in app.success)
     app.button(key="reopen_session").click().run()
     assert not app.exception
-    assert any("Saved decision" in h.value for h in app.subheader)
+    assert any("Quyết định đã lưu" in h.value for h in app.subheader)
     app.number_input(key="q_0").set_value(0)
     app.button(key="run_scenarios").click().run()
     assert not app.exception
@@ -93,3 +95,51 @@ render(application_runtime=MMSRuntime(build_demo_service(),SourceSettings(source
     assert not app.dataframe
     assert "comparison" not in app.session_state
     assert not any(b.key=="save_decision" for b in app.button)
+
+
+def test_unsubmitted_parameter_changes_disable_saving_stale_plan(tmp_path,monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"stale.sqlite"))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.button(key="run_scenarios").click().run()
+    app.number_input(key="q_0").set_value(0).run()
+    assert not app.exception
+    assert app.button(key="save_decision").disabled
+    app.button(key="run_scenarios").click().run()
+    assert not app.button(key="save_decision").disabled
+
+
+def test_pending_notes_and_backtest_report_survive_reruns(tmp_path,monkeypatch):
+    from inventory_dw_dss.mms.tracking.repository import DecisionRepository
+    path=tmp_path/"notes.sqlite"
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(path))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.button(key="run_scenarios").click().run()
+    app.text_input(key="note_0_B").set_value("Cần kiểm đếm")
+    app.button(key="save_decision").click().run()
+    repo=DecisionRepository(path)
+    saved=repo.get_session(repo.list_sessions()[0]["session_id"])
+    assert saved["actions"][0]["action"] == "pending"
+    app.button(key="evaluate").click().run()
+    assert "_mms_backtest" in app.session_state
+    app.text_input(key="sku_search").set_value("B").run()
+    assert not app.exception
+    assert "_mms_backtest" in app.session_state
+
+
+def test_manager_drafts_survive_switching_comparison_scenarios(tmp_path,monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"drafts.sqlite"))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.button(key="run_scenarios").click().run()
+    app.button(key="approve_allocated").click().run()
+    app.selectbox(key="action_0_B").set_value("edited")
+    app.number_input(key="edit_0_B").set_value(3)
+    app.text_input(key="note_0_B").set_value("Giữ ghi chú khi so sánh").run()
+    app.selectbox(key="active_scenario").set_value(1).run()
+    app.selectbox(key="active_scenario").set_value(0).run()
+    assert not app.exception
+    assert app.selectbox(key="action_0_B").value == "edited"
+    assert app.number_input(key="edit_0_B").value == 3
+    assert app.text_input(key="note_0_B").value == "Giữ ghi chú khi so sánh"

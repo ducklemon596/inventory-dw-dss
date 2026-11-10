@@ -50,3 +50,12 @@ def test_followup_requires_full_observations_and_keeps_sources_separate(tmp_path
     assert loaded["actions"][0]["action"] == "rejected"
     repo.add_followups(session_id, outcomes())
     assert len(repo.get_session(session_id)["followups"]) == 3
+
+
+def test_pending_manager_note_is_saved_without_approving_order(tmp_path):
+    repo=DecisionRepository(tmp_path/"notes.sqlite")
+    result=service().execute_scenario(ScenarioConfig(T))
+    saved=repo.save_decision(result,[ManagerAction("B","pending",note="Kiểm tra tồn thực tế")])
+    assert saved["actions"][0]["action"] == "pending"
+    assert saved["actions"][0]["note"] == "Kiểm tra tồn thực tế"
+    assert saved["actions"][0]["quantity"] is None

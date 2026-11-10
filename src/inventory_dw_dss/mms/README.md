@@ -1,5 +1,8 @@
 # Model Management Subsystem
 
+The [Inventory Studio UI guide](../../../docs/mms-ui.md) includes the dashboard
+preview, launch command and manager workflow.
+
 MMS implements MA90, HistGB inference, coverage suggestions, scenario allocation,
 historical metrics and SQLite decision tracking behind `MMSService`. Production
 requires a verified normalized export and the original trusted trained bundle;

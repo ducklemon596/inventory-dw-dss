@@ -4,14 +4,19 @@ import os
 from pathlib import Path
 import sqlite3
 import hashlib
+from datetime import date
 
 import duckdb
+import pandas as pd
 import streamlit as st
 
 from inventory_dw_dss.mms.core.schemas import PROFILES, ScenarioComparison, ScenarioConfig, MMSValidationError, to_dict
-from inventory_dw_dss.mms.evaluation.backtesting import Backtester
 from inventory_dw_dss.mms.runtime import SourceSettings, build_runtime
-from inventory_dw_dss.mms.tracking.repository import DecisionRepository, ManagerAction
+from inventory_dw_dss.mms.tracking.repository import DecisionRepository
+from inventory_dw_dss.mms.ui_theme import apply_theme
+from inventory_dw_dss.mms.ui_presenters import (PROFILE_LABELS, config_matches, csv_export, scenario_label)
+from inventory_dw_dss.mms.ui_views import (show_items, result_metrics, comparison_view,
+    manager_view, evaluation_view, sessions_view)
 
 
 @st.cache_resource
@@ -20,6 +25,7 @@ def configured_runtime(settings):
 
 
 def reset_manager_inputs():
+    st.session_state.pop("_mms_manager_drafts",None)
     for key in list(st.session_state):
         if key.startswith(("action_", "edit_", "note_")):
             del st.session_state[key]
@@ -38,100 +44,163 @@ def bind_runtime(active_runtime):
     if st.session_state.get("_mms_runtime_identity") != token:
         st.session_state.pop("comparison",None)
         st.session_state.pop("reopened_session",None)
+        for key in ("_mms_backtest","_mms_overview","_mms_last_saved","evaluation_dates"):
+            st.session_state.pop(key,None)
         reset_manager_inputs()
         st.session_state["_mms_runtime_identity"]=token
 
 
-def render(configure_page=True, application_runtime=None):
+def sidebar_controls(runtime):
+    with st.sidebar:
+        st.html('<div class="mms-brand">Inventory Studio</div>')
+        st.caption("MODEL MANAGEMENT · DECISION SUPPORT")
+        st.divider()
+        analysis_date=st.date_input("Ngày phân tích",date(2025,6,30),key="analysis_date")
+        count=st.selectbox("Số phương án",[2,3,4,1],key="scenario_count")
+        st.caption("Mỗi phương án dùng chung một snapshot tại ngày đã chọn.")
+        run=st.button("Chạy phương án",key="run_scenarios",type="primary",width="stretch")
+        configs=[]
+        for i in range(count):
+            with st.expander(f"Phương án {chr(65+i)}",expanded=i==0):
+                profile=st.selectbox("Ưu tiên xếp hạng",PROFILES,index=i,key=f"profile_{i}",format_func=PROFILE_LABELS.get)
+                pstar=st.number_input("Ngưỡng điểm rủi ro",min_value=0.,max_value=1.,value=.3,step=.05,key=f"pstar_{i}")
+                k=st.number_input("Số SKU xem xét · K",min_value=1,value=50,key=f"k_{i}")
+                tau=st.number_input("Số ngày bao phủ · tau",min_value=.1,value=14.,key=f"tau_{i}")
+                unlimited=st.checkbox("Không giới hạn Q",key=f"unlimited_{i}")
+                q=st.number_input("Giới hạn đơn vị · Q",min_value=0,
+                    value=15 if runtime.settings.source=="demo" else 150,key=f"q_{i}",disabled=unlimited)
+                configs.append(ScenarioConfig(analysis_date,profile=profile,pstar=pstar,top_k=k,
+                    unit_budget_q=None if unlimited else q,coverage_tau_days=tau))
+        st.caption("Q là tổng đơn vị quy ước theo từng SKU, không phải ngân sách tiền tệ.")
+        st.divider()
+        with st.expander("Thông tin nguồn và mô hình"):
+            settings=runtime.settings
+            model=runtime.service.executor.risk_model
+            st.caption("Nguồn mô phỏng" if runtime.is_demo else "Nguồn dữ liệu vận hành")
+            st.text(f"Mô hình: {getattr(model,'version','Chưa cấu hình')}")
+            st.text(f"Nguồn: {settings.source}")
+            if settings.release_id:
+                st.text(f"Release: {settings.release_id}")
+            st.caption("Thứ tự xử lý: ngưỡng rủi ro → xếp hạng → K → tính đề xuất → phân bổ Q.")
+    return configs,run
+
+
+def overview(runtime,analysis_date):
+    token=(st.session_state['_mms_runtime_identity'],str(analysis_date))
+    cached=st.session_state.get('_mms_overview')
+    if not cached or cached['token']!=token:
+        try:
+            snapshot=runtime.service.provider.get_snapshot(analysis_date)
+            cached={'token':token,'snapshot':snapshot}
+        except MMSValidationError as exc:
+            cached={'token':token,'error':str(exc)}
+        st.session_state['_mms_overview']=cached
+    if cached.get('error'):
+        st.warning(f"Chưa đọc được snapshot cho ngày này: {cached['error']}")
+        return
+    rows=cached['snapshot'].rows
+    for col,label,value in zip(st.columns(3),
+        ['SKU trong snapshot','SKU có tồn dương','SKU không phát sinh bán 90 ngày'],
+        [len(rows),sum(r.available_stock>0 for r in rows),sum(r.sales_90d==0 for r in rows)]):
+        col.metric(label,f"{value:,}")
+
+
+def model_catalog(service):
+    with st.expander("Bốn thành phần mô hình đang sử dụng"):
+        names={"MB1":("MA90","Ước lượng tốc độ bán và dự báo nhu cầu."),
+            "MB2":("HistGB","Chấm điểm và xếp hạng rủi ro hết hàng."),
+            "MB3":("Bổ sung tồn kho","Tính số lượng theo số ngày bao phủ mục tiêu."),
+            "MB4":("Phân bổ nguồn lực","Lập phương án theo K, Q và chính sách ưu tiên.")}
+        for col,model in zip(st.columns(4),service.list_models()):
+            name,description=names[model.model_id]
+            col.markdown(f"**{model.model_id} · {name}**")
+            col.caption(description)
+
+
+def render(configure_page=True,application_runtime=None):
     if configure_page:
-        st.set_page_config(page_title="Inventory MMS", layout="wide")
-    st.title("Inventory decision support")
+        st.set_page_config(page_title="Inventory Studio",page_icon="▦",layout="wide")
+    apply_theme()
     try:
-        active_runtime = application_runtime or configured_runtime(SourceSettings.from_env())
-        bind_runtime(active_runtime)
-        service, demo = active_runtime.service, active_runtime.is_demo
-        if demo:
-            detail = ("fixed scores, not trained HistGB predictions" if active_runtime.settings.source == "demo"
-                      else "HistGB trained on generated data; not pharmacy research results")
-            st.warning(f"SYNTHETIC DEMO — {detail}.")
-        st.caption("Review alerts and proposed units separately. Q is a unit budget; manager review is required.")
-        with st.expander("Model catalog"):
-            st.json(to_dict(service.list_models()))
-        with st.form("scenario_parameters"):
-            analysis_date = st.text_input("Analysis date (YYYY-MM-DD)", "2025-06-30")
-            count = st.selectbox("Number of scenarios", [2, 3, 4, 1])
-            configs = []
-            # Render all four slots so changing count does not require a form submit.
-            for i in range(4):
-                with st.expander(f"Scenario {i+1} (used when count ≥ {i+1})", expanded=i == 0):
-                    profile = st.selectbox("Ranking profile", PROFILES, index=i, key=f"profile_{i}")
-                    pstar = st.number_input("Risk threshold", min_value=0., max_value=1., value=.3, key=f"pstar_{i}")
-                    k = st.number_input("Review slots K", min_value=1, value=50, key=f"k_{i}")
-                    tau = st.number_input("Coverage days tau", min_value=.1, value=14., key=f"tau_{i}")
-                    unlimited = st.checkbox("No unit budget limit", value=False, key=f"unlimited_{i}")
-                    q = st.number_input("Unit budget Q", min_value=0, value=15, key=f"q_{i}")
-                    configs.append(dict(analysis_date=analysis_date, profile=profile, pstar=pstar,
-                        top_k=k, unit_budget_q=None if unlimited else q, coverage_tau_days=tau))
-            run = st.form_submit_button("Run scenarios", key="run_scenarios")
+        runtime=application_runtime or configured_runtime(SourceSettings.from_env())
+        bind_runtime(runtime)
+        configs,run=sidebar_controls(runtime)
+        st.html('<div class="mms-eyebrow">INVENTORY / DECISION WORKSPACE</div>')
+        st.title("Lập kế hoạch tồn kho")
+        st.caption("Ưu tiên SKU cần kiểm tra, so sánh phương án và ghi nhận quyết định của người quản lý.")
+        if runtime.is_demo:
+            detail=("điểm cố định để minh họa" if runtime.settings.source=="demo"
+                    else "HistGB được huấn luyện trên dữ liệu tổng hợp")
+            st.warning(f"DỮ LIỆU MÔ PHỎNG · SYNTHETIC DEMO — {detail}. Kết quả không đại diện cho dữ liệu nhà thuốc thật.")
         if run:
-            active = configs[:count]
-            comparison = (service.compare_scenarios(active) if count > 1 else
-                          ScenarioComparison((service.execute_scenario(active[0]),), ()))
-            # Manager inputs belong to the exact run, even if SKU IDs are reused.
+            with st.spinner("Đang đọc snapshot và so sánh phương án…"):
+                comparison=(runtime.service.compare_scenarios(configs) if len(configs)>1 else
+                    ScenarioComparison((runtime.service.execute_scenario(configs[0]),),()))
             reset_manager_inputs()
-            st.session_state["comparison"] = comparison
-        comparison = st.session_state.get("comparison")
-        if comparison:
-            for i, result in enumerate(comparison.results):
-                st.subheader(f"Scenario {i+1}: {result.config.profile}")
-                st.json(result.summary)
-                review, orders = st.tabs(["Review List", "Order Proposal"])
-                review.dataframe(to_dict(result.review_list), width="stretch")
-                orders.dataframe(to_dict(result.order_proposal), width="stretch")
-            if comparison.overlap:
-                st.subheader("Scenario differences")
-                st.json(to_dict(comparison.overlap))
-            st.download_button("Download results JSON", json.dumps(to_dict(comparison), indent=2, allow_nan=False),
-                               file_name="mms-scenarios.json", mime="application/json")
-            selected = st.selectbox("Scenario to save / evaluate", range(len(comparison.results)),
-                                    format_func=lambda i: f"Scenario {i+1}")
-            result = comparison.results[selected]
-            st.subheader("Manager review")
-            actions = []
-            with st.form("manager_actions"):
-                for item in result.review_list:
-                    with st.expander(f"{item.sku_id}: {item.explanation}"):
-                        action = st.selectbox("Action", ["pending", "accepted", "rejected", "edited"], key=f"action_{selected}_{item.sku_id}")
-                        quantity = st.number_input("Edited quantity (used for edited action)", min_value=0,
-                            value=item.allocated_q, key=f"edit_{selected}_{item.sku_id}")
-                        note = st.text_input("Manager note", key=f"note_{selected}_{item.sku_id}")
-                        if action != "pending":
-                            actions.append(ManagerAction(item.sku_id, action, quantity if action == "edited" else None, note))
-                save = st.form_submit_button("Save decision", key="save_decision")
-            if save:
-                session = repository().save_decision(result, actions)
-                st.success(f"Saved decision {session['session_id']}")
-            st.subheader("Historical evaluation")
-            evaluation_dates = st.text_input("Decision dates (comma separated)", str(result.config.analysis_date))
-            horizon = st.selectbox("Outcome horizon days", [7, 14, 30])
-            if st.button("Evaluate", key="evaluate"):
-                report = Backtester(service, active_runtime.load_outcomes()).run(result.config,
-                    [d.strip() for d in evaluation_dates.split(",")], horizon)
-                st.json(to_dict(report))
-        st.subheader("Saved sessions")
-        sessions = repository().list_sessions()
-        if sessions:
-            session_id = st.selectbox("Session", [s["session_id"] for s in sessions])
-            if st.button("Reopen session", key="reopen_session"):
-                st.session_state["reopened_session"] = repository().get_session(session_id)
-            if st.button("Observe historical follow-up", key="followup"):
-                st.session_state["reopened_session"] = repository().add_followups(session_id, active_runtime.load_outcomes())
-            if st.session_state.get("reopened_session"):
-                st.subheader("Saved decision — exact configuration and versions")
-                st.json(st.session_state["reopened_session"])
-    except (MMSValidationError, OSError) as exc:
+            for key in ('_mms_backtest','_mms_last_saved','evaluation_dates'):
+                st.session_state.pop(key,None)
+            if st.session_state.get('active_scenario',0)>=len(comparison.results):
+                st.session_state.pop('active_scenario',None)
+            st.session_state['comparison']=comparison
+        comparison=st.session_state.get('comparison')
+        if not comparison:
+            overview(runtime,configs[0].analysis_date)
+            st.write("")
+            st.html('<div class="mms-empty"><h3>Sẵn sàng tạo kế hoạch đầu tiên</h3><p>Chọn ngày phân tích và điều kiện ở thanh bên, sau đó bấm <b>Chạy phương án</b> để xem danh sách ưu tiên và phân bổ.</p></div>')
+            model_catalog(runtime.service)
+            with st.expander("Các phiên đã lưu",expanded=False):
+                sessions_view(runtime,repository)
+            return
+        pending=not config_matches(comparison,configs)
+        if pending:
+            st.warning("Tham số đã thay đổi. Kết quả bên dưới vẫn thuộc lần chạy trước; chạy lại phương án để lưu hoặc kiểm định.")
+        a,b=st.columns([2,1])
+        selected=a.selectbox("Phương án làm việc",range(len(comparison.results)),key='active_scenario',
+            format_func=lambda i:scenario_label(i,comparison.results[i].config))
+        result=comparison.results[selected]
+        b.caption(f"Snapshot ngày {result.config.analysis_date:%d/%m/%Y} · {len(comparison.results)} phương án")
+        result_metrics(result)
+        st.write("")
+        review,order,compare,manage,evaluate,sessions=st.tabs([
+            "Danh sách xem xét","Đề xuất đặt hàng","So sánh","Quyết định","Kiểm định","Phiên đã lưu"])
+        with review:
+            top,search=st.columns([2,1])
+            top.subheader("SKU cần người quản lý xem xét")
+            query=search.text_input("Tìm SKU",key='sku_search',placeholder="Nhập mã SKU…",label_visibility='collapsed')
+            st.caption("Điểm rủi ro là điểm xếp hạng 0–1. Cảnh báo có thể có đề xuất bằng 0 và cần được điều tra thêm.")
+            show_items(result.review_list,'review_table',query)
+            st.download_button("Tải danh sách đầy đủ CSV",csv_export(result.review_list),
+                file_name=f'mms-review-{result.config.analysis_date}-{result.config.profile}.csv',
+                mime='text/csv',key='export_review')
+            if result.review_list:
+                chart=pd.DataFrame([{'SKU':r.sku_id,'Điểm rủi ro':r.risk_score} for r in result.review_list[:12]]).set_index('SKU')
+                st.bar_chart(chart,color='#087f82',height=220)
+        with order:
+            st.subheader("Đề xuất đã được phân bổ")
+            st.caption("Chỉ gồm SKU đủ điều kiện với đề xuất và phân bổ lớn hơn 0. Đây là phương án để duyệt, chưa phải đơn mua hàng.")
+            if result.config.unit_budget_q is not None:
+                budget=result.config.unit_budget_q
+                spent=result.summary['units_allocated']
+                st.progress(spent/budget if budget else 0,text=f"Đã dùng {spent:,} / {budget:,} đơn vị")
+            show_items(result.order_proposal,'order_table',empty='Không có dòng được phân bổ. Kiểm tra Q, mức tồn và mục tiêu bao phủ.')
+            st.download_button("Tải đề xuất CSV",csv_export(result.order_proposal),
+                file_name=f'mms-orders-{result.config.analysis_date}-{result.config.profile}.csv',mime='text/csv',key='export_orders')
+        with compare:
+            comparison_view(comparison)
+        with manage:
+            manager_view(result,selected,repository,pending)
+        with evaluate:
+            evaluation_view(result,runtime,pending)
+        with sessions:
+            sessions_view(runtime,repository)
+        with st.expander("Chi tiết tái lập và tải toàn bộ kết quả"):
+            st.json({'config':to_dict(result.config),'metadata':result.metadata})
+            st.download_button("Tải toàn bộ phương án JSON",json.dumps(to_dict(comparison),indent=2,ensure_ascii=False,allow_nan=False),
+                file_name='mms-scenarios.json',mime='application/json',key='export_comparison')
+        model_catalog(runtime.service)
+    except (MMSValidationError,OSError) as exc:
         st.error(str(exc))
-    except (duckdb.Error, sqlite3.Error) as exc:
+    except (duckdb.Error,sqlite3.Error) as exc:
         st.error(f"Database unavailable or export schema incomplete: {exc}")
 
 
