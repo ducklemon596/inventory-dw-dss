@@ -26,13 +26,16 @@ and the injected-runtime embedding interface are preserved.
 ## Workflow
 
 1. Select the analysis date and 1–4 scenarios in the sidebar. Each has its own
-   ranking profile, risk threshold, K, target coverage and unit budget Q.
+   ranking profile, risk threshold, K, unit budget Q and order policy. **Theo số ngày bao phủ**
+   is the coverage rule. **Theo mức phục vụ** adds a service-level slider, a lead time and
+   optional ABC levels, and treats tau as the review period.
 2. Click **Chạy phương án**. All compared plans use one snapshot and risk vector.
    Select the working scenario above the four summary cards.
 3. **Danh sách xem xét** includes investigation alerts even when suggested q=0.
    Search affects the displayed table; the clearly labelled full-list CSV exports
    the original plan, with date/profile in its filename.
 4. **Đề xuất đặt hàng** contains eligible positive allocations and shows Q use.
+   Service-level plans add the target level S and safety stock, and each decision row explains its quantity.
    Q denotes product-specific units, not money or a purchasing-cost estimate.
 5. **So sánh** shows quantities, constraints and pairwise SKU overlap. Risk scores
    are displayed on a 0–1 scale, without implying calibrated probabilities.

@@ -1,10 +1,10 @@
 from ..core.schemas import DecisionItem, MMSValidationError, ScenarioResult, finite
 from ..diagnostics.flags import diagnostic_flags
-from .replenishment import suggested_quantity
+from .policy import POLICY_VERSIONS, propose
 
 
 def execute(snapshot, config, risk_scores, metadata):
-    """Provisional MVP: pstar → profile sort → K → greedy partial allocation.
+    """Provisional MVP: pstar → profile sort → K → policy quantity → greedy partial allocation.
 
     Q is an abstract sum of product-specific stock units, not currency or a
     shared physical unit. It is an explicit scenario resource assumption.
@@ -32,15 +32,17 @@ def execute(snapshot, config, risk_scores, metadata):
     remaining = config.unit_budget_q
     review = []
     for rank, (row, risk) in enumerate(ranked, 1):
-        q = suggested_quantity(row, config.coverage_tau_days)
+        decision = propose(row, config)
+        q = decision.suggested_q
         allocated = q if remaining is None else min(q, remaining)
         if remaining is not None:
             remaining -= allocated
         review.append(DecisionItem(row.sku_id, rank, risk, row.available_stock, row.stock_unit,
             row.dos, row.vel90, q, allocated, row.eligible, diagnostic_flags(row),
             f"{config.profile} rank {rank}; risk score {risk:.4f} >= {config.pstar}; "
-            f"coverage target {config.coverage_tau_days:g} days; suggested {q}, allocated {allocated}. "
-            "Manager review required; risk alone is not a purchase instruction."))
+            f"{decision.explanation}, allocated {allocated}. "
+            "Manager review required; risk alone is not a purchase instruction.",
+            decision.target_level, decision.safety_stock, decision.service_level))
     orders = tuple(item for item in review if item.eligible and item.suggested_q > 0 and item.allocated_q > 0)
     return ScenarioResult(config, tuple(review), orders, {
         "selected_sku_count": len(review), "candidate_count": len(candidates),
@@ -50,5 +52,6 @@ def execute(snapshot, config, risk_scores, metadata):
         "mean_selected_risk_score": sum(r.risk_score for r in review) / len(review) if review else None,
         "resource_utilization": (sum(r.allocated_q for r in orders) / config.unit_budget_q
                                  if config.unit_budget_q else None),
-    }, dict(metadata, policy_version="scenario-mvp-v1", allocation="greedy_partial",
+    }, dict(metadata, policy_version="scenario-mvp-v1",
+            replenishment_policy=config.policy, replenishment_version=POLICY_VERSIONS[config.policy], allocation="greedy_partial",
             parameter_order="pstar,profile,K,tau,Q", provisional_tn_rules=True))

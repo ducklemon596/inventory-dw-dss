@@ -28,3 +28,10 @@ def test_visible_plan_is_bound_to_all_submitted_scenario_parameters():
     assert config_matches(comparison,configs)
     assert not config_matches(comparison,[replace(configs[0],unit_budget_q=0),configs[1]])
     assert not config_matches(comparison,configs[:1])
+
+
+def test_risk_caption_names_the_artifact_target_and_horizon():
+    from inventory_dw_dss.mms.ui_presenters import risk_caption
+    assert "nhà thuốc hết hàng" in risk_caption({"risk_target": "pharmacy_shortfall", "label_horizon_days": 14})
+    assert "14 ngày" in risk_caption({"risk_target": "pharmacy_shortfall", "label_horizon_days": 14})
+    assert "quầy bán" in risk_caption({})  # artifacts trained before targets existed

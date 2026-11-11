@@ -356,6 +356,16 @@ models:
         description: Whether the product is active, not on consignment and stocked at the dispensary; the order cohort.
         data_type: UInt8
 
+      - name: abc_class
+        description: >
+          ABC class by 90-day sales value among products on the same snapshot date: A covers the first 80%
+          of value, B the next 15%, C the rest. NULL without sales value. Drives per-class service levels.
+        data_type: Nullable(String)
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A', 'B', 'C']
+
       - name: label_dispensary_stockout_7d
         description: Whether the dispensary balance reaches zero or below on any day in (T, T+7].
         data_type: Nullable(UInt8)
@@ -363,6 +373,12 @@ models:
       - name: label_sold_qty_7d
         description: Sold quantity in (T, T+7], in the stock unit.
         data_type: Nullable(Decimal(38, 6))
+
+      - name: label_pharmacy_shortfall_7d
+        description: >
+          Whether sales in (T, T+7] reach available_qty at T, i.e. the pharmacy would run out without a new
+          receipt. The stockout-risk target for purchase decisions.
+        data_type: Nullable(UInt8)
 
       - name: label_window_has_stocktake_7d
         description: Whether (T, T+7] contains a stocktake posting; such windows can be excluded from evaluation.
@@ -376,6 +392,12 @@ models:
         description: Sold quantity in (T, T+14], in the stock unit.
         data_type: Nullable(Decimal(38, 6))
 
+      - name: label_pharmacy_shortfall_14d
+        description: >
+          Whether sales in (T, T+14] reach available_qty at T, i.e. the pharmacy would run out without a new
+          receipt. The stockout-risk target for purchase decisions.
+        data_type: Nullable(UInt8)
+
       - name: label_window_has_stocktake_14d
         description: Whether (T, T+14] contains a stocktake posting.
         data_type: Nullable(UInt8)
@@ -387,6 +409,12 @@ models:
       - name: label_sold_qty_30d
         description: Sold quantity in (T, T+30], in the stock unit.
         data_type: Nullable(Decimal(38, 6))
+
+      - name: label_pharmacy_shortfall_30d
+        description: >
+          Whether sales in (T, T+30] reach available_qty at T, i.e. the pharmacy would run out without a new
+          receipt. The stockout-risk target for purchase decisions.
+        data_type: Nullable(UInt8)
 
       - name: label_window_has_stocktake_30d
         description: Whether (T, T+30] contains a stocktake posting.

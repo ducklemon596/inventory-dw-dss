@@ -60,6 +60,31 @@ export MMS_DATA_SOURCE=mart MMS_ARTIFACT_PATH=artifacts/pharmacy-mart-h14-v1/his
 uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/ui.py
 ```
 
+### Risk target
+
+`train-histgb --target` chooses what MB2 predicts:
+
+- `dispensary_stockout` is the default and matches artifacts trained before this option existed.
+- `pharmacy_shortfall` predicts that sales reach all stock at T, and is recommended for order planning.
+
+The manifest records `risk_target`. Backtests and the UI caption follow it. See [risk target](../../../docs/mms-real-data-evaluation.md#risk-target-shelf-stockout-vs-pharmacy-shortfall).
+
+### Replenishment policy
+
+MB3 has two policies:
+
+- `coverage` is the default and orders `ceil(tau × MA90 − stock)`.
+- `service_level` orders up to the negative-binomial demand quantile over `coverage_tau_days` (review period) plus `lead_time_days`. It is fitted from the 90-day daily mean and `sales_std_90d`; without a std it uses Poisson.
+
+`abc_service=True` applies A 98% / B 95% / C 90% from the mart's `abc_class`. Items carry `target_level`, `safety_stock` and `service_level`.
+
+`inventory-mms simulate-policy` replays policies over mart history. See [real-data evaluation](../../../docs/mms-real-data-evaluation.md#replenishment-policy-mb3).
+
+```python
+config = ScenarioConfig("2025-12-01", policy="service_level", service_level=0.95,
+                        coverage_tau_days=7, lead_time_days=2)
+```
+
 Production UI configuration (normalized DuckDB export):
 
 ```powershell

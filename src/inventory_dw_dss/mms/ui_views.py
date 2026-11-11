@@ -10,7 +10,7 @@ from .core.schemas import MMSValidationError, to_dict
 from .evaluation.backtesting import Backtester
 from .tracking.repository import ManagerAction
 from .ui_presenters import (ACTION_LABELS, FLAG_LABELS, PROFILE_LABELS, comparison_rows,
-                            config_token, csv_export, item_rows, scenario_label)
+                            config_token, csv_export, item_rows, quantity_note, scenario_label)
 
 
 def show_items(items, key, query="", empty="Không có SKU trong danh sách này."):
@@ -19,6 +19,9 @@ def show_items(items, key, query="", empty="Không có SKU trong danh sách này
         st.info(empty if not query else "Không có SKU khớp từ khóa tìm kiếm.")
     # Keep an explicit schema so an empty Order List remains a valid empty table.
     columns=["rank","sku_id","risk_score","available_stock","stock_unit","dos","suggested_q","allocated_q","flags"]
+    # Service-level plans also show the order-up-to target and its safety part.
+    if any(r.get("target_level") is not None for r in rows):
+        columns[6:6]=["service_level","target_level","safety_stock"]
     frame=pd.DataFrame(rows,columns=columns)
     if not frame.empty:
         frame["flags"]=frame["flags"].map(lambda flags:
@@ -29,6 +32,10 @@ def show_items(items, key, query="", empty="Không có SKU trong danh sách này
             "risk_score":st.column_config.ProgressColumn("Điểm rủi ro",min_value=0,max_value=1,format="%.3f"),
             "available_stock":st.column_config.NumberColumn("Tồn kho",format="%.1f"),
             "stock_unit":"Đơn vị SKU","dos":st.column_config.NumberColumn("Bao phủ (ngày)",format="%.1f"),
+            "service_level":st.column_config.NumberColumn("Mức phục vụ",format="percent"),
+            "target_level":st.column_config.NumberColumn("Mức mục tiêu S",format="%.0f",
+                help="Nhu cầu trong chu kỳ xem xét + thời gian chờ hàng ở mức phục vụ đã chọn."),
+            "safety_stock":st.column_config.NumberColumn("Tồn an toàn",format="%.1f"),
             "suggested_q":st.column_config.NumberColumn("Đề xuất",format="%d"),
             "allocated_q":st.column_config.NumberColumn("Phân bổ",format="%d"),"flags":"Chẩn đoán"})
 
@@ -101,6 +108,7 @@ def manager_view(result,selected,repository,pending):
                 if key not in st.session_state:
                     st.session_state[key]=value
             with st.expander(f"#{item.rank} · {item.sku_id} · Đề xuất {item.suggested_q} / Phân bổ {item.allocated_q}"):
+                st.caption(quantity_note(item))
                 a,b=st.columns([1.2,1])
                 action=a.selectbox("Quyết định",list(ACTION_LABELS),format_func=ACTION_LABELS.get,
                                   key=f"action_{selected}_{item.sku_id}",on_change=remember_draft,args=(selected,item.sku_id))
