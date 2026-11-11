@@ -77,8 +77,17 @@ features AS (
     SELECT
         *,
         greatest(pharmacy_on_hand_qty, 0) AS available_qty,
-        toFloat64(sold_qty_90d) / 90 AS avg_daily_sold_qty_90d
+        toFloat64(sold_qty_90d) / 90 AS avg_daily_sold_qty_90d,
+        -- Running 90-day sales value across products of the same day, highest value first (ABC).
+        sum(toFloat64(greatest(sales_amount_90d, 0))) OVER value_rank AS cumulative_sales_amount_90d,
+        sum(toFloat64(greatest(sales_amount_90d, 0))) OVER same_day AS total_sales_amount_90d
     FROM windowed
+    WINDOW
+        value_rank AS (
+            PARTITION BY dataset_name, position_date ORDER BY sales_amount_90d DESC, product_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ),
+        same_day AS (PARTITION BY dataset_name, position_date)
 )
 
 SELECT
@@ -153,6 +162,15 @@ SELECT
     toUInt8(history_days >= 89) AS has_full_history,
     toUInt8(sold_qty_90d > 0 AND is_consignment = 0 AND has_dispensary_ledger = 1) AS is_orderable,
 
+    -- ABC by 90-day sales value: A = first 80% of the day's value, B = next 15%, C = the rest.
+    -- The share before the product decides, so the top seller is always A. NULL without sales value.
+    multiIf(
+        sales_amount_90d <= 0, NULL,
+        (cumulative_sales_amount_90d - toFloat64(sales_amount_90d)) / total_sales_amount_90d < 0.80, 'A',
+        (cumulative_sales_amount_90d - toFloat64(sales_amount_90d)) / total_sales_amount_90d < 0.95, 'B',
+        'C'
+    ) AS abc_class,
+
     -- Labels are NULL until the whole horizon is observed in the export.
     {%- for horizon in horizons %}
     if(
@@ -161,6 +179,14 @@ SELECT
         NULL
     ) AS label_dispensary_stockout_{{ horizon }}d,
     if(observed_days_next_{{ horizon }}d = {{ horizon }}, sold_qty_next_{{ horizon }}d, NULL) AS label_sold_qty_{{ horizon }}d,
+    -- Purchase-relevant shortfall: sales in the window reach all stock held at T, so without a new
+    -- receipt the pharmacy would run out. Unlike the dispensary label it ignores how promptly the
+    -- shelf was refilled, which reflects past manager actions rather than risk.
+    if(
+        observed_days_next_{{ horizon }}d = {{ horizon }},
+        toUInt8(sold_qty_next_{{ horizon }}d >= available_qty),
+        NULL
+    ) AS label_pharmacy_shortfall_{{ horizon }}d,
     if(
         observed_days_next_{{ horizon }}d = {{ horizon }},
         has_stocktake_next_{{ horizon }}d,

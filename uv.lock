@@ -662,12 +662,14 @@ mms = [
     { name = "joblib" },
     { name = "pandas" },
     { name = "scikit-learn" },
+    { name = "scipy" },
 ]
 ui = [
     { name = "duckdb" },
     { name = "joblib" },
     { name = "pandas" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "streamlit" },
 ]
 
@@ -690,6 +692,7 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'mms'", specifier = ">=2.2,<4" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "scikit-learn", marker = "extra == 'mms'", specifier = ">=1.7,<2" },
+    { name = "scipy", marker = "extra == 'mms'", specifier = ">=1.13,<2" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.40,<2" },
 ]
 provides-extras = ["mms", "ui"]

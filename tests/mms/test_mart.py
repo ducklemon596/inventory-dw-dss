@@ -143,3 +143,51 @@ def test_backtest_sku_scope_drops_only_stocktake_windows():
     assert by_sku["status"] == "evaluated" and by_sku["sop_excluded_sku_count"] == 1
     assert by_sku["risk"]["cohort_size"] == 39 - 3 - 1
     assert by_sku["existing_stockout_count"] == 3
+
+
+class StockProvider:
+    """Pharmacy stock i (dispensary half of it) for S01..S39; every product sells one unit a day."""
+
+    def get_snapshot(self, t, filters=None):
+        rows = [InventoryRow(f"S{i:02d}", "Tab", available_stock=float(i), sales_7d=7, sales_30d=30, sales_90d=90,
+                             revenue_90d=900., point_of_sale_stock=float(i // 2), eligible=True,
+                             features={"dispensary_on_hand_qty": float(i // 2), "days_since_last_stockout": None})
+                for i in range(0, 40)]
+        return InventorySnapshot(t, f"s-{t}", "mart-v1", rows)
+
+
+def sales_outcomes(t, horizon):
+    days = [Observation(t + timedelta(days=d), f"S{i:02d}", 1., stockout=(i // 2 < d)) for i in range(40)
+            for d in range(1, horizon + 1)]
+    return OutcomeProvider(days, t + timedelta(days=horizon), "labels-v1")
+
+
+def test_pharmacy_shortfall_target_labels_sales_against_all_stock(tmp_path, monkeypatch):
+    import inventory_dw_dss.mms.training as training
+    monkeypatch.setattr(training, "feature_set", lambda name: (("available_stock", "dispensary_on_hand_qty"),
+                        training.MART_PARAMS | {"max_iter": 20, "min_samples_leaf": 2}, True, "sku"))
+    info = train_histgb(StockProvider(), sales_outcomes(T, 7), [T], tmp_path / "bundle", "target-test",
+                        data_kind="verified", features_name="mart", horizon_days=7, risk_target="pharmacy_shortfall")
+    manifest = json.loads((tmp_path / "bundle/manifest.json").read_text())
+    # S00 holds no stock; 7 units sold reach the stock of S01..S07 only.
+    assert info["training_samples"] == 39 and manifest["positive_samples"] == 7
+    assert manifest["risk_target"] == "pharmacy_shortfall" and "available stock" in manifest["label_definition"]
+    with pytest.raises(MMSValidationError, match="risk target"):
+        train_histgb(StockProvider(), sales_outcomes(T, 7), [T], tmp_path / "other", "x", data_kind="verified",
+                     features_name="mart", horizon_days=7, risk_target="shelf")
+
+
+# Pharmacy: S01..S39 hold stock, S01..S07 sell out. Dispensary (stock i // 2): S02..S39 hold stock,
+# S02..S13 empty within 7 days.
+@pytest.mark.parametrize("target, cohort, positives", [("pharmacy_shortfall", 39, 7), ("dispensary_stockout", 38, 12)])
+def test_backtest_labels_follow_the_artifact_target(target, cohort, positives):
+    class Model:
+        version, calibrated, manifest = "fixture", False, {"risk_target": target}
+
+        def score(self, rows):
+            return [1 / (1 + r.available_stock) for r in rows]
+
+    service = MMSService(StockProvider(), Model())
+    day = Backtester(service, sales_outcomes(T, 7)).run(ScenarioConfig(T, pstar=0, top_k=5), [T], 7,
+                                                         sop_scope="sku").per_date[0]
+    assert day["risk"]["cohort_size"] == cohort and day["new_stockout_count"] == positives

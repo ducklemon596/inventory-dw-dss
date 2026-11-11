@@ -66,6 +66,9 @@ class InventoryRow:
     diagnostic_observed_days: int | None = None
     # Stock at the point of sale when it differs from orderable stock (dispensary vs pharmacy).
     point_of_sale_stock: float | None = None
+    # Daily sales standard deviation over 90 days; None means Poisson variance in the policy.
+    sales_std_90d: float | None = None
+    abc_class: str | None = None
 
     def __post_init__(self):
         if not isinstance(self.sku_id, str) or not self.sku_id or not self.stock_unit:
@@ -85,6 +88,10 @@ class InventoryRow:
         finite(self.available_stock, "available_stock")
         if self.point_of_sale_stock is not None:
             finite(self.point_of_sale_stock, "point_of_sale_stock")
+        if self.sales_std_90d is not None:
+            finite(self.sales_std_90d, "sales_std_90d", 0)
+        if self.abc_class not in (None, "A", "B", "C"):
+            raise MMSValidationError("abc_class must be A, B, C or null")
         for key in ("sales_7d", "sales_30d", "sales_90d"):
             finite(getattr(self, key), key, 0)
         if not self.sales_7d <= self.sales_30d <= self.sales_90d:
@@ -130,6 +137,7 @@ class InventorySnapshot:
 
 
 PROFILES = ("RiskFirst", "LowStock", "DOS", "RevenueAtRisk")
+POLICIES = ("coverage", "service_level")
 
 
 @dataclass(frozen=True)
@@ -139,7 +147,12 @@ class ScenarioConfig:
     pstar: float = 0.3
     top_k: int = 50
     unit_budget_q: int | None = None
+    # coverage: tau days of MA90. service_level: tau is the review period, plus lead time.
     coverage_tau_days: float = 14
+    policy: str = "coverage"
+    service_level: float = 0.95
+    lead_time_days: float = 2
+    abc_service: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "analysis_date", as_date(self.analysis_date))
@@ -153,6 +166,13 @@ class ScenarioConfig:
             raise MMSValidationError("unit_budget_q must be a nonnegative integer or null")
         if finite(self.coverage_tau_days, "coverage_tau_days") <= 0:
             raise MMSValidationError("coverage_tau_days must be positive")
+        if self.policy not in POLICIES:
+            raise MMSValidationError(f"policy must be one of {POLICIES}")
+        if not 0.5 <= finite(self.service_level, "service_level") < 1:
+            raise MMSValidationError("service_level must be in [0.5, 1)")
+        finite(self.lead_time_days, "lead_time_days", 0)
+        if type(self.abc_service) is not bool:
+            raise MMSValidationError("abc_service must be a boolean")
 
 
 @dataclass(frozen=True)
@@ -184,6 +204,10 @@ class DecisionItem:
     eligible: bool
     flags: tuple[str, ...]
     explanation: str
+    # Service-level policy only: order-up-to level, its safety part and the applied level.
+    target_level: float | None = None
+    safety_stock: float | None = None
+    service_level: float | None = None
 
 
 @dataclass(frozen=True)

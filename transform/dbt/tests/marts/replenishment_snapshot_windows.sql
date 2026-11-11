@@ -39,5 +39,6 @@ where actual.sold_qty_7d != expected.sold_7d
     or actual.dispensary_stockout_days_90d != expected.stockout_days_90d
     or (actual.snapshot_date + 30 <= export_end.last_date and (
         actual.label_sold_qty_30d is null or actual.label_sold_qty_30d != expected.sold_next_30d
-        or actual.label_dispensary_stockout_30d != expected.stockout_next_30d))
+        or actual.label_dispensary_stockout_30d != expected.stockout_next_30d
+        or actual.label_pharmacy_shortfall_30d != toUInt8(expected.sold_next_30d >= actual.available_qty)))
     or (actual.snapshot_date + 30 > export_end.last_date and actual.label_dispensary_stockout_30d is not null)

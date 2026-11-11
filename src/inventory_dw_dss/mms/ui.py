@@ -10,11 +10,11 @@ import duckdb
 import pandas as pd
 import streamlit as st
 
-from inventory_dw_dss.mms.core.schemas import PROFILES, ScenarioComparison, ScenarioConfig, MMSValidationError, to_dict
+from inventory_dw_dss.mms.core.schemas import POLICIES, PROFILES, ScenarioComparison, ScenarioConfig, MMSValidationError, to_dict
 from inventory_dw_dss.mms.runtime import SourceSettings, build_runtime
 from inventory_dw_dss.mms.tracking.repository import DecisionRepository
 from inventory_dw_dss.mms.ui_theme import apply_theme
-from inventory_dw_dss.mms.ui_presenters import (PROFILE_LABELS, config_matches, csv_export, scenario_label)
+from inventory_dw_dss.mms.ui_presenters import (POLICY_LABELS, PROFILE_LABELS, config_matches, risk_caption, csv_export, scenario_label)
 from inventory_dw_dss.mms.ui_views import (show_items, result_metrics, comparison_view,
     manager_view, evaluation_view, sessions_view)
 
@@ -65,12 +65,25 @@ def sidebar_controls(runtime):
                 profile=st.selectbox("Ưu tiên xếp hạng",PROFILES,index=i,key=f"profile_{i}",format_func=PROFILE_LABELS.get)
                 pstar=st.number_input("Ngưỡng điểm rủi ro",min_value=0.,max_value=1.,value=.3,step=.05,key=f"pstar_{i}")
                 k=st.number_input("Số SKU xem xét · K",min_value=1,value=50,key=f"k_{i}")
-                tau=st.number_input("Số ngày bao phủ · tau",min_value=.1,value=14.,key=f"tau_{i}")
+                policy=st.selectbox("Chính sách đặt hàng",POLICIES,key=f"policy_{i}",format_func=POLICY_LABELS.get,
+                    help="Mức phục vụ: đặt đủ để đáp ứng nhu cầu trong chu kỳ xem xét + thời gian chờ hàng "
+                         "với xác suất đã chọn, dựa trên độ biến động bán 90 ngày.")
+                service=policy=="service_level"
+                tau=st.number_input("Chu kỳ xem xét (ngày) · tau" if service else "Số ngày bao phủ · tau",
+                    min_value=.1,value=7. if service else 14.,key=f"tau_{i}_{policy}")
+                level,lead,abc=.95,2.,False
+                if service:
+                    abc=st.checkbox("Mức phục vụ theo nhóm ABC",key=f"abc_{i}",
+                        help="A 98% · B 95% · C 90%; nhóm theo giá trị bán 90 ngày.")
+                    level=st.slider("Mức phục vụ",min_value=.80,max_value=.99,value=.95,step=.01,key=f"level_{i}",
+                        disabled=abc,help="Áp dụng cho SKU chưa có nhóm ABC khi bật phân nhóm.")
+                    lead=st.number_input("Thời gian chờ hàng (ngày)",min_value=0.,value=2.,step=1.,key=f"lead_{i}")
                 unlimited=st.checkbox("Không giới hạn Q",key=f"unlimited_{i}")
                 q=st.number_input("Giới hạn đơn vị · Q",min_value=0,
                     value=15 if runtime.settings.source=="demo" else 150,key=f"q_{i}",disabled=unlimited)
                 configs.append(ScenarioConfig(analysis_date,profile=profile,pstar=pstar,top_k=k,
-                    unit_budget_q=None if unlimited else q,coverage_tau_days=tau))
+                    unit_budget_q=None if unlimited else q,coverage_tau_days=tau,
+                    policy=policy,service_level=level,lead_time_days=lead,abc_service=abc))
         st.caption("Q là tổng đơn vị quy ước theo từng SKU, không phải ngân sách tiền tệ.")
         st.divider()
         with st.expander("Thông tin nguồn và mô hình"):
@@ -81,7 +94,7 @@ def sidebar_controls(runtime):
             st.text(f"Nguồn: {settings.source}")
             if settings.release_id:
                 st.text(f"Release: {settings.release_id}")
-            st.caption("Thứ tự xử lý: ngưỡng rủi ro → xếp hạng → K → tính đề xuất → phân bổ Q.")
+            st.caption("Thứ tự xử lý: ngưỡng rủi ro → xếp hạng → K → chính sách đặt hàng → phân bổ Q.")
     return configs,run
 
 
@@ -167,7 +180,7 @@ def render(configure_page=True,application_runtime=None):
             top,search=st.columns([2,1])
             top.subheader("SKU cần người quản lý xem xét")
             query=search.text_input("Tìm SKU",key='sku_search',placeholder="Nhập mã SKU…",label_visibility='collapsed')
-            st.caption("Điểm rủi ro là điểm xếp hạng 0–1. Cảnh báo có thể có đề xuất bằng 0 và cần được điều tra thêm.")
+            st.caption(risk_caption(getattr(runtime.service.executor.risk_model,"manifest",{})))
             show_items(result.review_list,'review_table',query)
             st.download_button("Tải danh sách đầy đủ CSV",csv_export(result.review_list),
                 file_name=f'mms-review-{result.config.analysis_date}-{result.config.profile}.csv',

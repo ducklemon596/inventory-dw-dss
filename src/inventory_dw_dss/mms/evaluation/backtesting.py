@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from ..core.schemas import MMSValidationError, as_date, finite, to_dict
 from ..models.scenario import execute
+from ..models.targets import model_target, target_label, target_stock
 from .metrics import demand_metrics, risk_metrics
 
 
@@ -83,6 +84,8 @@ class Backtester:
         if sop_scope not in ("date", "sku"):
             raise MMSValidationError("sop_scope must be date or sku")
         config = self.service._config(config)
+        # Labels follow the artifact's declared target so scores and outcomes measure the same event.
+        target = model_target(self.service.executor.risk_model)
         dates = sorted({as_date(t) for t in decision_dates})
         if not dates:
             raise MMSValidationError("At least one decision date is required")
@@ -108,12 +111,13 @@ class Backtester:
             metadata = self.service._metadata(snapshot) | {"outcome_version": self.outcomes.version,
                 "outcome_data_cutoff": str(self.outcomes.data_cutoff),
                 "outcome_start": str(t+timedelta(days=1)), "outcome_end": str(t+timedelta(days=horizon_days))}
+            metadata["risk_target"] = target
             result = execute(snapshot, replace(config, analysis_date=t), scores, metadata)
             # Incident-stockout ranking metrics exclude existing zero/negative point-of-sale balances
             # and, under per-SKU scope, windows corrected by a stocktake.
             cohort = [(r, score) for r, score in zip(snapshot.rows, scores)
-                      if r.risk_stock > 0 and r.sku_id not in sop_skus]
-            labels = [int(any(o.stockout for o in future[r.sku_id])) for r, _ in cohort]
+                      if target_stock(r, target) > 0 and r.sku_id not in sop_skus]
+            labels = [target_label(r, future[r.sku_id], target) for r, _ in cohort]
             risk = risk_metrics(labels, [s for _, s in cohort], [r.sku_id for r, _ in cohort], config.top_k)
             actual = [sum(o.sales_quantity for o in future[r.sku_id]) for r in snapshot.rows]
             predicted = [r.vel90*horizon_days for r in snapshot.rows]
@@ -127,7 +131,7 @@ class Backtester:
                 stockout_coverage=len(review_skus & new_stockout_skus)/len(new_stockout_skus) if new_stockout_skus else None)
             per_date.append(dict(row, status="evaluated", metadata=metadata,
                 demand=demand_metrics(actual, predicted), risk=risk, allocation=allocation,
-                existing_stockout_count=sum(r.risk_stock == 0 for r in snapshot.rows),
+                existing_stockout_count=sum(target_stock(r, target) == 0 for r in snapshot.rows),
                 sop_excluded_sku_count=len(sop_skus) if sop_scope == "sku" else 0,
                 negative_balance_count=sum(r.available_stock < 0 for r in snapshot.rows),
                 new_stockout_count=sum(labels)))

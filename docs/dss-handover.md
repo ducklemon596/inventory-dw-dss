@@ -13,7 +13,7 @@ The current consumer interface is the ClickHouse star schema: four dimensions, t
 
 ## Using the replenishment facts
 
-Read features and labels from `fct_product_replenishment_snapshot`. Filter the decision cohort with `is_orderable = 1`, and for incident-stockout risk also `dispensary_on_hand_qty > 0`. Exclude rows whose label is NULL (window past the export end) and, for evaluation, optionally rows with `label_window_has_stocktake_{h}d = 1`. Quantities share the product's stock unit; use `unit_sales_value_90d` to express budgets in currency. The [replenishment guide](../transform/dbt/models/marts/replenishment/README.md) lists the business rules and column groups.
+Read features and labels from `fct_product_replenishment_snapshot`. Filter the decision cohort with `is_orderable = 1`. For purchase risk use `label_pharmacy_shortfall_{h}d` with `available_qty > 0`; for shelf stockouts use `label_dispensary_stockout_{h}d` with `dispensary_on_hand_qty > 0`. Exclude rows whose label is NULL (window past the export end) and, for evaluation, optionally rows with `label_window_has_stocktake_{h}d = 1`. Quantities share the product's stock unit; use `unit_sales_value_90d` to express budgets in currency. The [replenishment guide](../transform/dbt/models/marts/replenishment/README.md) lists the business rules and column groups.
 
 Sales have no warehouse relationship. Inventory daily rows are observations, not a dense calendar or guaranteed stock availability. Historical inventory and UOM rules are preserved; new DSS outputs should be built as separate dbt models with explicit grains.
 

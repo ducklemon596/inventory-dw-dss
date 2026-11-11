@@ -2,7 +2,7 @@ from .directory import list_models
 from .manager import ModelManager
 from .schemas import ArtifactError, ExecutionError, MMSValidationError, ModelResult, to_dict
 from ..models.ma90 import forecast
-from ..models.replenishment import suggested_quantity
+from ..models.policy import propose
 
 
 class ModelExecutor:
@@ -40,7 +40,8 @@ class ModelExecutor:
                 scores = self.risk_scores(snapshot)
                 items = tuple({"sku_id": r.sku_id, "risk_score": score} for r, score in zip(snapshot.rows, scores))
             elif model_id == "MB3":
-                items = tuple({"sku_id": r.sku_id, "suggested_q": suggested_quantity(r, config.coverage_tau_days)} for r in snapshot.rows)
+                items = tuple({"sku_id": r.sku_id, **{k: v for k, v in to_dict(propose(r, config)).items() if k != "explanation"}}
+                              for r in snapshot.rows)
             else:
                 from ..models.scenario import execute
                 result = execute(snapshot, config, self.risk_scores(snapshot), metadata)

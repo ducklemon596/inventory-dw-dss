@@ -31,12 +31,14 @@ def feature_set(name):
 
 
 def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_version, *, data_kind,
-                 horizon_days=7, seed=7, features_name="basic", sop_scope=None):
+                 horizon_days=7, seed=7, features_name="basic", sop_scope=None,
+                 risk_target="dispensary_stockout"):
     import joblib
     import pandas as pd
     import sklearn
     from sklearn.ensemble import HistGradientBoostingClassifier
     from .models.histgb import feature_matrix
+    from .models.targets import LABEL_DEFINITIONS, check_target, target_label, target_stock
 
     target = Path(output_directory).resolve()
     if target.exists():
@@ -46,6 +48,7 @@ def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_
     if (type(horizon_days) is not int or horizon_days not in {7, 14, 30}
             or type(seed) is not int or not 0 <= seed <= 2**32-1):
         raise MMSValidationError("Training requires a 7/14/30-day horizon and integer seed in [0,2**32-1]")
+    check_target(risk_target)
     features, params, allow_missing, default_scope = feature_set(features_name)
     sop_scope = sop_scope or default_scope
     if sop_scope not in ("date", "sku"):
@@ -59,8 +62,8 @@ def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_
         snapshot = provider.get_snapshot(t)
         if snapshot.analysis_date != t:
             raise MMSValidationError("Training provider returned a different date")
-        # Incident cohort: eligible products still in stock at the point of sale.
-        cohort = [r for r in snapshot.rows if r.risk_stock > 0 and r.eligible]
+        # Incident cohort: eligible products still holding the stock the target measures.
+        cohort = [r for r in snapshot.rows if target_stock(r, risk_target) > 0 and r.eligible]
         future = outcomes.window(t, [r.sku_id for r in cohort], horizon_days)
         if sop_scope == "date" and any(o.sop_day for days in future.values() for o in days):
             excluded.append({"analysis_date": str(t), "reason": "SOP outcome window"})
@@ -75,7 +78,7 @@ def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_
         for row, vector in zip(cohort, feature_matrix(cohort, features, allow_missing)):
             examples.append({"date": str(t), "sku_id": row.sku_id,
                              "features": [None if v != v else v for v in vector],
-                             "label": int(any(o.stockout for o in future[row.sku_id]))})
+                             "label": target_label(row, future[row.sku_id], risk_target)})
     if len(versions) != 1:
         raise MMSValidationError("Training requires one consistent data version")
     if data_kind == "verified" and any(v.startswith("synthetic") for v in versions):
@@ -83,7 +86,8 @@ def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_
     if len(examples) < 20 or {e["label"] for e in examples} != {0, 1}:
         raise MMSValidationError("Training needs at least 20 eligible samples and both outcome classes")
     training_hash = hashlib.sha256(json.dumps({"examples": examples, "features": features,
-        "horizon_days": horizon_days, "seed": seed, "outcome_version": outcomes.version},
+        "horizon_days": horizon_days, "seed": seed, "outcome_version": outcomes.version,
+        **({"risk_target": risk_target} if risk_target != "dispensary_stockout" else {})},
         sort_keys=True, allow_nan=False).encode()).hexdigest()
     x = pd.DataFrame([e["features"] for e in examples], columns=list(features), dtype=float)
     model = HistGradientBoostingClassifier(random_state=seed, **params)
@@ -105,7 +109,7 @@ def train_histgb(provider, outcomes, decision_dates, output_directory, artifact_
             "label_horizon_days": horizon_days, "random_seed": seed, "data_kind": data_kind,
             "feature_set": features_name, "model_params": params, "sop_scope": sop_scope,
             "excluded_sop_rows": sop_rows, **({"missing_values": "native"} if allow_missing else {}),
-            "label_definition": "any verified stockout in (T,T+horizon]; existing zero/negative balances excluded",
+            "risk_target": risk_target, "label_definition": LABEL_DEFINITIONS[risk_target],
             "training_protocol": "new-histgb-v1; fixed parameters; no held-out tuning or calibration",
             "original_tn_reproduction": False}
         (staged/"manifest.json").write_text(json.dumps(manifest, indent=2, allow_nan=False), encoding="utf-8")

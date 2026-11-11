@@ -82,6 +82,7 @@ class ReplenishmentMartProvider:
                 sku_id=raw["sku_id"], stock_unit=raw["stock_unit_code"] or "UNKNOWN_UNIT",
                 available_stock=_number(raw["available_qty"]),
                 point_of_sale_stock=_number(raw["dispensary_on_hand_qty"]),
+                sales_std_90d=_number(raw["sold_qty_std_90d"]), abc_class=raw.get("abc_class"),
                 sales_7d=_number(raw["sold_qty_7d"]), sales_30d=_number(raw["sold_qty_30d"]),
                 sales_90d=_number(raw["sold_qty_90d"]), revenue_90d=_number(raw["sales_amount_90d"]),
                 eligible=bool(raw["is_orderable"]),

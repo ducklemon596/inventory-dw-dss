@@ -143,3 +143,19 @@ def test_manager_drafts_survive_switching_comparison_scenarios(tmp_path,monkeypa
     assert app.selectbox(key="action_0_B").value == "edited"
     assert app.number_input(key="edit_0_B").value == 3
     assert app.text_input(key="note_0_B").value == "Giữ ghi chú khi so sánh"
+
+
+def test_service_level_policy_controls_and_target_columns(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMS_DECISIONS_PATH", str(tmp_path / "ui.sqlite"))
+    for key in ("MMS_DUCKDB_PATH", "MMS_ARTIFACT_PATH", "MMS_MANIFEST_PATH"):
+        monkeypatch.delenv(key, raising=False)
+    app = AppTest.from_file(str(Path(__file__).parents[2] / "src/inventory_dw_dss/mms/ui.py"), default_timeout=20).run()
+    app.selectbox(key="policy_0").set_value("service_level").run()
+    app.slider(key="level_0").set_value(.9)
+    app.number_input(key="lead_0").set_value(3.)
+    app.button(key="run_scenarios").click().run()
+    assert not app.exception
+    config = app.session_state["comparison"].results[0].config
+    assert (config.policy, config.service_level, config.lead_time_days, config.coverage_tau_days) == ("service_level", .9, 3., 7.)
+    assert any("target_level" in frame.value.columns for frame in app.dataframe)
+    assert app.session_state["comparison"].results[1].config.policy == "coverage"
