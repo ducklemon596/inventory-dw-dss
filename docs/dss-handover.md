@@ -1,6 +1,6 @@
 # DSS handover
 
-The current consumer interface is the ClickHouse star schema: four dimensions, three source-preserving facts and two replenishment facts built for DSS models. Use the [data model](data-model.md) for grains and relationships and [data semantics](data-semantics.md) before interpreting measures.
+The current consumer interface is the ClickHouse star schema: four dimensions, three source-preserving facts and two replenishment facts built for DSS models. The [MMS backend and Streamlit app](../src/inventory_dw_dss/mms/README.md) reads the replenishment facts for forecasting, risk inference, replenishment scenarios, evaluation and decision tracking. Use the [data model](data-model.md) for grains and relationships and [data semantics](data-semantics.md) before interpreting measures.
 
 ## Current analytical interfaces
 

@@ -11,6 +11,7 @@ Read [architecture](docs/architecture.md), [source/data model](docs/data-model.m
 | Load PostgreSQL from the source export | [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md) | Full or inclusive date range; preparation is automatic |
 | Load ClickHouse raw from PostgreSQL | [Raw loader](src/inventory_dw_dss/README.md) | Incremental by default, explicit full or inclusive date range |
 | Build marts and run tests | [dbt transformations](transform/dbt/README.md) | All models, selected layer/model, or tests only |
+| Run MMS scenarios, evaluation and decision tracking | [MMS backend and Streamlit](src/inventory_dw_dss/mms/README.md) | Synthetic demo or verified normalized export + approved artifact |
 
 ## Source CSV files (optional PostgreSQL initialization)
 
@@ -23,6 +24,11 @@ data/raw/
 ```
 
 Rename the downloaded files if necessary; preserve their contents, headers and `RowNumber` values. Both files are required for the [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md). Once PostgreSQL is populated, routine extraction and dbt transformations do not require these CSVs. Governed UOM reference files remain included in Git.
+
+The [MMS integration guide](docs/mms-production.md) records the verified v2
+download hashes and row counts, source-audit command, new model training and
+the trained simulation app. Raw source files are not automatically valid
+pharmacy-level available-stock snapshots.
 
 ## Start local services
 
@@ -62,4 +68,4 @@ UI preferences and sessions stay in the container; recreating it resets them. Da
 
 ## Consumer boundary
 
-The warehouse includes four conformed dimensions and three source-preserving facts, with preserved sales lines, recorded inventory movements and observed daily balances. Sales have no verified warehouse assignment or completion/cancellation status. Unsupported conversion stays missing; in these facts missing days are not zero stock or demand. Two replenishment facts give DSS models a dense daily stock position, point-in-time features and forward stockout labels under documented ledger rules; see [replenishment marts](transform/dbt/models/marts/replenishment/README.md). See [semantics](docs/data-semantics.md) before building consumer calculations.
+The warehouse includes four conformed dimensions and three source-preserving facts, with preserved sales lines, recorded inventory movements and observed daily balances. Sales have no verified warehouse assignment or completion/cancellation status. Unsupported conversion stays missing; in these facts missing days are not zero stock or demand. Two replenishment facts give DSS models a dense daily stock position, point-in-time features and forward stockout labels under documented ledger rules; see [replenishment marts](transform/dbt/models/marts/replenishment/README.md). The [MMS backend](src/inventory_dw_dss/mms/README.md) reads them for forecasting, risk inference and decision scenarios. See [semantics](docs/data-semantics.md) before building consumer calculations.
