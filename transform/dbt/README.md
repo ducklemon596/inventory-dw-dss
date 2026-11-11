@@ -8,8 +8,8 @@ This project turns ClickHouse raw records into tested sales and inventory interf
 |---|---|---|
 | Raw | Current extracted records, stored as source text | External tables declared in [_sources.yml](models/staging/_sources.yml) |
 | Staging | Strict types, consistent names and missing-value normalization, same source grain | [12 views](models/staging/README.md) |
-| Intermediate | Reusable sales/UOM and inventory business calculations | [Seven views and two full-rebuild tables](models/intermediate/README.md) |
-| Marts | Four shared Dimensions and three source-preserving Facts | [Seven full-rebuild tables](models/marts/README.md) |
+| Intermediate | Reusable sales/UOM, inventory and replenishment business calculations | [Eight views and three full-rebuild tables](models/intermediate/README.md) |
+| Marts | Four shared Dimensions, three source-preserving Facts and two replenishment Facts | [Nine full-rebuild tables](models/marts/README.md) |
 
 `{{ source('raw', 'sales_line') }}` resolves a declared raw table. `{{ ref('stg_sales_invoice_lines') }}` resolves another model by name, independent of its SQL directory. Both register dependencies; `ref()` also lets dbt build parents before children. Model YAML describes business fields, types and tests. [Macros](macros/README.md) centralize normalization and version validation; [seeds](seeds/README.md) contain governed mapping inputs.
 
@@ -23,6 +23,8 @@ flowchart LR
     SEED[Versioned UOM seed] --> SALES --> SF[Sales fact]
     SALES --> COVERAGE[Observed sales / coverage views]
     SEG --> DIAG[Gap diagnostic view]
+    SEG --> POS[Dense daily position] --> RP[Replenishment facts]
+    SF --> RP
 ```
 
 Facts reuse source keys; they do not join Dimensions during materialization. Relationship tests link those roles. A fact-only ancestor selection does not build Dimensions automatically.

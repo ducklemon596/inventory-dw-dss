@@ -1,0 +1,222 @@
+version: 2
+
+models:
+  - name: int_inventory_daily_flows
+    description: >-
+      One dataset, product, warehouse and movement date, with recorded flows grouped into replenishment roles and the
+      day's opening and closing balances selected in source order.
+
+    config:
+      meta:
+        grain:
+          - dataset_name
+          - product_id
+          - warehouse_id
+          - position_date
+        limitations:
+          - Only days with at least one recorded movement appear.
+          - Stocktake detection relies on transaction type and the stokopname description keyword.
+
+    columns:
+      - name: dataset_name
+        description: Source dataset that scopes the inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: position_date
+        description: Calendar date of the recorded movements.
+        data_type: Date32
+        data_tests:
+          - not_null
+
+      - name: opening_stock_quantity
+        description: Opening balance of the first source-ordered movement on the date, in the stock unit.
+        data_type: Decimal(18, 6)
+
+      - name: closing_stock_quantity
+        description: Closing balance of the last source-ordered movement on the date, in the stock unit.
+        data_type: Decimal(18, 6)
+
+      - name: stock_unit_id
+        description: Stock unit of the closing balance; flows on the ledger share this unit.
+        data_type: UInt32
+
+      - name: consignment_status
+        description: Ownership classification recorded on the last movement of the date.
+        data_type: Nullable(String)
+
+      - name: sold_qty
+        description: Net quantity issued by SALE movements, in the stock unit. Serves as the demand measure.
+        data_type: Decimal(38, 6)
+
+      - name: customer_return_qty
+        description: Net quantity received back from customers by RETURN movements, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: purchase_received_qty
+        description: Net quantity received from suppliers by PURCHASE movements, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: transfer_in_qty
+        description: Quantity received from another warehouse of the pharmacy, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: transfer_out_qty
+        description: Quantity sent to another warehouse of the pharmacy, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: adjustment_qty
+        description: >-
+          Net quantity of all other movements (stocktake, product import/creation and UNKNOWN postings), in the stock
+          unit.
+        data_type: Decimal(38, 6)
+
+      - name: balance_gap_qty
+        description: >-
+          Sum of opening-minus-previous-closing differences at ledger discontinuities on the date. A balance
+          correction, not a flow.
+        data_type: Decimal(38, 6)
+
+      - name: has_purchase_receipt
+        description: Whether any supplier quantity was received on the date.
+        data_type: UInt8
+
+      - name: has_stocktake
+        description: Whether any movement on the date is a stocktake posting.
+        data_type: UInt8
+
+      - name: movement_count
+        description: Number of recorded movements on the date.
+        data_type: UInt32
+    data_tests:
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - warehouse_id
+              - position_date
+
+  - name: int_inventory_daily_position
+    description: >-
+      One dataset, product, warehouse and calendar date from the ledger's first movement to the export end date, with
+      the balance carried forward on days without movements.
+
+    config:
+      meta:
+        grain:
+          - dataset_name
+          - product_id
+          - warehouse_id
+          - position_date
+        assumptions:
+          - A recorded balance holds until the next movement; days without movements have zero flows.
+          - The export end date is the latest movement date of the dataset and applies to all ledgers.
+        limitations:
+          - Recorded balances are not certified physical counts; stocktake postings correct them periodically.
+
+    columns:
+      - name: dataset_name
+        description: Source dataset that scopes the inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: warehouse_id
+        description: Identifier of the storage location.
+        data_type: UInt32
+        data_tests:
+          - not_null
+
+      - name: position_date
+        description: Calendar date of the position.
+        data_type: Date32
+        data_tests:
+          - not_null
+
+      - name: on_hand_qty
+        description: >-
+          Closing balance at the end of the date in the stock unit; the last recorded closing when no movement
+          occurred. Negative values are kept as recorded.
+        data_type: Decimal(18, 6)
+
+      - name: stock_unit_id
+        description: Stock unit of the ledger.
+        data_type: UInt32
+
+      - name: consignment_status
+        description: Latest recorded ownership classification up to the date.
+        data_type: Nullable(String)
+
+      - name: sold_qty
+        description: Net quantity issued by SALE movements on the date, in the stock unit; zero without movements.
+        data_type: Decimal(38, 6)
+
+      - name: customer_return_qty
+        description: Net quantity returned by customers on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: purchase_received_qty
+        description: Net quantity received from suppliers on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: transfer_in_qty
+        description: Quantity received from another warehouse on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: transfer_out_qty
+        description: Quantity sent to another warehouse on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: adjustment_qty
+        description: Net quantity of stocktake, import and UNKNOWN movements on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: balance_gap_qty
+        description: Balance correction from ledger discontinuities on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: has_purchase_receipt
+        description: Whether any supplier quantity was received on the date.
+        data_type: UInt8
+
+      - name: has_stocktake
+        description: Whether a stocktake posting occurred on the date.
+        data_type: UInt8
+
+      - name: movement_count
+        description: Number of recorded movements on the date.
+        data_type: UInt32
+
+      - name: has_movement
+        description: Whether the balance was observed through at least one movement on the date.
+        data_type: UInt8
+    data_tests:
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - warehouse_id
+              - position_date

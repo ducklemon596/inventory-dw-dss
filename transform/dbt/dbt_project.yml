@@ -23,6 +23,8 @@ clean-targets:
 
 vars:
   uom_mapping_version: uom_mapping_v2_2026-11-08
+  # Point-of-sale warehouse (Apotek); other warehouses are storerooms that replenish it.
+  replenishment_dispensary_warehouse_id: 1
 
 seeds:
   inventory_dw:

@@ -23,6 +23,21 @@ An observed closing of 10 on Monday and 7 on Tuesday represents two balances, no
 
 `recorded_delta_qty` is inbound minus outbound based on the recorded quantity columns, independent of movement classification. RETURN direction, UNKNOWN labels, negative quantities/balances and zero-flow rows remain as recorded. No return is linked to a sales line.
 
+## Replenishment rules
+
+The replenishment branch needs a stock position for every day, so it applies perpetual-inventory rules that the observed facts avoid. The rules are supported by the export: 99.98% of movements open at the previous closing, ledger rows satisfy opening + received − issued = closing, and each product has one stock unit across warehouses.
+
+| Rule | Applied as |
+|---|---|
+| Balance persistence | A closing balance holds until the next movement; a day without movements has zero flows |
+| Demand | Ledger SALE issues in the stock unit, not sales-line quantity (whose unit can differ) |
+| Point of sale | Only the dispensary (Apotek) sells; other warehouses are storerooms that transfer stock to it |
+| Stockout | Dispensary closing ≤ 0; negative balances count as empty shelves |
+| Stocktake | IMPORT_STOCKTAKE or `stokopname` postings are flagged, not removed |
+| Scope | Products with an inventory ledger; services sold without stock are excluded |
+
+These are operating assumptions, not certified physical counts. They apply only to `fct_product_daily_position` and `fct_product_replenishment_snapshot`; the observed facts keep their stricter meaning. See the [replenishment guide](../transform/dbt/models/marts/replenishment/README.md).
+
 ## Financial and temporal limits
 
 Fees and percentages retained on sales rows have no fully verified invoice-vs-line allocation contract. Do not derive an invoice total or certified net revenue by summing or reallocating them without further evidence. The source timestamp and export order do not reveal when an old transaction or correction arrived. Historical availability, reservations, stock allocation and physical-count truth cannot be reconstructed from the available observations.
