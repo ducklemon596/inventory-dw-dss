@@ -15,7 +15,7 @@ flowchart LR
 
 The operational path is **PostgreSQL → extraction → ClickHouse raw → dbt Staging → Intermediate → Marts → DSS**. Original CSV exports are used only for optional OLTP reconstruction and reviewed source evidence; the DW extraction path reads PostgreSQL.
 
-Staging expresses source records with analytical names and types. Intermediate models add reusable business calculations while retaining source grain where required. Marts provide four shared dimensions and three facts. The DSS application and forecasting/replenishment features are not part of the implemented system.
+Staging expresses source records with analytical names and types. Intermediate models add reusable business calculations while retaining source grain where required. Marts provide four shared dimensions, three source-preserving facts and two replenishment facts. The [MMS package](../src/inventory_dw_dss/mms/README.md) reads the replenishment facts to score stockout risk, propose orders and record manager decisions.
 
 Extraction and dbt transformations are separate stages. Raw publication is per source table; dbt rebuilds persistent analytical tables per relation. Consumers should use a release only after extraction and the complete dbt build have both succeeded.
 

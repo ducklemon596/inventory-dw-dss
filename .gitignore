@@ -15,6 +15,7 @@ data/raw/sales_raw.csv
 data/raw/stock_raw.csv
 data/processed/
 reports/
+artifacts/
 transform/dbt/target/
 transform/dbt/dbt_packages/
 transform/dbt/logs/

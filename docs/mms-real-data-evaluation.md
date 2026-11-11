@@ -1,6 +1,6 @@
 # MMS on pharmacy data: training and evaluation
 
-MMS now reads the dbt [replenishment marts](../transform/dbt/models/marts/replenishment/README.md) (`MMS_DATA_SOURCE=mart`). This page records how the stockout-risk model (MB2) was trained, evaluated and improved on the 2023–2025 pharmacy export, and how to reproduce it.
+MMS reads the dbt [replenishment marts](../transform/dbt/models/marts/replenishment/README.md). Metric and term definitions are in the [MMS README](../src/inventory_dw_dss/mms/README.md). This page records how the stockout-risk model (MB2) was trained, evaluated and improved on the 2023–2025 pharmacy export, and how to reproduce it.
 
 ## Problem setup
 
@@ -28,7 +28,7 @@ Per-date stocktake exclusion, the original MMS behaviour, is unusable on this da
 | 3 | Daily instead of weekly training rows / deeper trees | no gain (0.878–0.888) | | |
 | 3 | Drop stocktake-touched windows from training | 0.889 | 0.328 | 0.42 |
 | 4 | Poisson / negative-binomial exceedance probabilities as features | no gain | | |
-| 5 | Pruned to 35 numeric features (adopted as `feature_set=mart`) | 0.892 | 0.325 | 0.41 |
+| 5 | Pruned to 35 numeric features (the current feature set) | 0.892 | 0.325 | 0.41 |
 
 The strongest new feature is `dispensary_peak_cover_days`: dispensary stock divided by the 90-day peak daily sale. `days_since_last_stockout`, `sold_qty_max_90d` and `sold_qty_365d` follow. Product category, drug class and manufacturer added less than 0.002 AUC. They were left out so that all MMS features stay numeric.
 
@@ -52,7 +52,7 @@ The MMS-native backtest gives the same picture: CLI training on 111 Mondays (185
 
 | Artifact | ROC-AUC | Precision@50 | Recall@50 | Lift |
 |---|---|---|---|---|
-| `basic` (original 4 features, retrained on pharmacy data) | 0.780 | 0.361 | 0.143 | 5.3 |
+| Original 4-feature model, retrained on pharmacy data (since removed) | 0.780 | 0.361 | 0.143 | 5.3 |
 | `mart` (35 features) | **0.849** | **0.419** | **0.165** | **6.1** |
 
 Recall@50 is bounded by the cohort: about 140 products per date stock out within 14 days, so a 50-item review list cannot catch most of them. Raise K or shorten the horizon when wider coverage matters.
@@ -135,22 +135,19 @@ Replay limits:
 Requires the marts built by `inventory-dw-dss transform`.
 
 ```bash
-export MMS_DATA_SOURCE=mart
-uv run --locked --extra mms inventory-mms train-histgb --feature-set mart --horizon 14 --target pharmacy_shortfall \
-  --data-kind verified --artifact-version pharmacy-shortfall-h14-v1 --output artifacts/pharmacy-shortfall-h14-v1 \
-  --dates 2023-04-03,2023-04-10,...,2025-05-12
-MMS_ARTIFACT_PATH=artifacts/pharmacy-shortfall-h14-v1/histgb.joblib \
-MMS_MANIFEST_PATH=artifacts/pharmacy-shortfall-h14-v1/manifest.json \
-uv run --locked --extra mms inventory-mms backtest --horizon 14 --top-k 50 --dates 2025-06-02,...,2025-12-15
+uv run --locked --extra mms inventory-mms train --dates 2023-04-03..2025-05-12 --horizon 14 \
+  --target pharmacy_shortfall --version shortfall-h14-v1 --output artifacts/shortfall-h14-v1
+export MMS_ARTIFACT_PATH=artifacts/shortfall-h14-v1/histgb.joblib MMS_MANIFEST_PATH=artifacts/shortfall-h14-v1/manifest.json
+uv run --locked --extra mms inventory-mms backtest --dates 2025-06-02..2025-12-15 --horizon 14
 uv run --locked --extra mms inventory-mms simulate-policy --start 2025-06-02 --end 2025-12-28 \
   --policies coverage:14,coverage:21,coverage:28,service:0.9,service:0.95,service:0.98,service:abc
 ```
 
-Use `--target dispensary_stockout` (the default) for the shelf-alert artifact. Training takes about one minute. The last training date plus the horizon must precede the first evaluated date; the artifact's `supervised_data_cutoff` enforces this.
+Use `--target dispensary_stockout` for the shelf-alert model. Training takes about one minute and reproduces the pharmacy-shortfall row above (188,249 training rows; AUC 0.900, Precision@50 0.764). The last training date plus the horizon must precede the first evaluated date; the bundle's `supervised_data_cutoff` enforces this.
 
 ## Known limits and next levers
 
 - Recorded sales censor demand during stockouts, so forecasts for frequently empty products are biased low.
 - Most remaining errors are sudden demand spikes on low-stock products. A shorter horizon (7 d) or a larger K catches more of them.
-- Flags `dispensary_out_of_stock` and `transfer_from_storeroom` separate incidents in progress, and cases a storeroom transfer can fix, from purchase decisions. The allocation still proposes purchase quantities only.
+- Flags `dispensary_empty` and `transfer_from_storeroom` separate incidents in progress, and cases a storeroom transfer can fix, from purchase decisions. The allocation still proposes purchase quantities only.
 - No lead-time or supplier data exists, so lead time and review period remain manager parameters.

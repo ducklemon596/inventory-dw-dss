@@ -1,47 +1,48 @@
-"""Single UI boundary: model logic stays outside Streamlit."""
-from .core.executor import ModelExecutor
-from .core.schemas import MMSValidationError, ScenarioComparison, ScenarioConfig
-from .evaluation.scenario_comparison import compare_results
-from .models.scenario import execute
+"""MMS entry point shared by the CLI and the Streamlit app.
+
+Configuration comes from the environment:
+    MMS_ARTIFACT_PATH, MMS_MANIFEST_PATH   trained risk model bundle
+    MMS_DECISIONS_PATH                     SQLite file for saved decisions (app only)
+    CLICKHOUSE_HOST / _HTTP_PORT / _DB / _USER / _PASSWORD / _SECURE
+"""
+import os
+
+from .data import MartReader
+from .models.risk import RiskModel
+from .models.scenario import build_plan
+from .schemas import MMSError
 
 
 class MMSService:
-    def __init__(self, provider, risk_model=None):
-        self.provider = provider
-        self.executor = ModelExecutor(risk_model)
+    def __init__(self, reader, risk_model):
+        self.reader = reader
+        self.risk_model = risk_model
 
-    def list_models(self):
-        return self.executor.list_models()
+    @classmethod
+    def from_env(cls, env=None):
+        env = os.environ if env is None else env
+        artifact, manifest = env.get("MMS_ARTIFACT_PATH"), env.get("MMS_MANIFEST_PATH")
+        if not artifact or not manifest:
+            raise MMSError("Set MMS_ARTIFACT_PATH and MMS_MANIFEST_PATH to a trained risk model "
+                           "(inventory-mms train)")
+        return cls(MartReader(), RiskModel.load(artifact, manifest))
 
-    def run_model(self, model_id, snapshot, parameters=None):
-        return self.executor.run_model(model_id, snapshot, parameters)
-
-    @staticmethod
-    def _config(config):
-        return config if isinstance(config, ScenarioConfig) else ScenarioConfig(**config)
+    def scores(self, snapshot):
+        self.risk_model.check_snapshot(snapshot)
+        return self.risk_model.score(snapshot.rows)
 
     def _metadata(self, snapshot):
-        return {"analysis_date": str(snapshot.analysis_date), "snapshot_version": snapshot.snapshot_version,
-                "data_version": snapshot.data_version, "location_scope": snapshot.location_scope,
-                "artifact_version": self.executor.risk_model.version,
-                "supervised_data_cutoff": getattr(self.executor.risk_model, "manifest", {}).get("supervised_data_cutoff"),
-                "calibrated": self.executor.risk_model.calibrated,
-                "model_versions": {m.model_id: m.version for m in self.list_models()}}
+        return {"analysis_date": str(snapshot.analysis_date), "data_version": snapshot.data_version,
+                "risk_model": self.risk_model.version, "risk_target": self.risk_model.target,
+                "risk_horizon_days": self.risk_model.horizon_days}
 
-    def execute_scenario(self, config):
-        config = self._config(config)
-        snapshot = self.provider.get_snapshot(config.analysis_date)
-        scores = self.executor.risk_scores(snapshot)
-        return execute(snapshot, config, scores, self._metadata(snapshot))
+    def plan(self, config):
+        return self.compare([config])[0]
 
-    def compare_scenarios(self, configs):
-        configs = tuple(self._config(c) for c in configs)
-        if not 2 <= len(configs) <= 4:
-            raise MMSValidationError("Compare requires 2–4 scenarios")
+    def compare(self, configs):
+        """Plans for several configurations on one snapshot and one set of risk scores."""
         if len({c.analysis_date for c in configs}) != 1:
-            raise MMSValidationError("Compared scenarios must use the same analysis date")
-        snapshot = self.provider.get_snapshot(configs[0].analysis_date)
-        scores = self.executor.risk_scores(snapshot)
-        metadata = self._metadata(snapshot)
-        results = tuple(execute(snapshot, c, scores, metadata) for c in configs)
-        return ScenarioComparison(results, compare_results(results))
+            raise MMSError("Compared plans must share an analysis date")
+        snapshot = self.reader.snapshot(configs[0].analysis_date)
+        scores = self.scores(snapshot)
+        return [build_plan(snapshot, c, scores, self._metadata(snapshot)) for c in configs]

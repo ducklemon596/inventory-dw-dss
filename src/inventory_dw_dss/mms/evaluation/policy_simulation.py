@@ -12,7 +12,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from ..core.schemas import MMSValidationError, as_date
+from ..schemas import MMSError, as_date
 from ..models.policy import ABC_SERVICE_LEVELS, demand_quantile
 
 
@@ -41,7 +41,7 @@ def parse_policy(text):
             return PolicySpec("service_level", float(value))
     except ValueError:
         pass
-    raise MMSValidationError(f"Invalid policy '{text}'; use coverage:<days>, service:<level> or service:abc")
+    raise MMSError(f"Invalid policy '{text}'; use coverage:<days>, service:<level> or service:abc")
 
 
 @dataclass(frozen=True)
@@ -59,30 +59,30 @@ class SimulationData:
     def __post_init__(self):
         shape = (len(self.days), len(self.product_ids))
         if self.demand.shape != shape or self.actual_stock.shape != shape:
-            raise MMSValidationError("Simulation matrices must be days x products")
+            raise MMSError("Simulation matrices must be days x products")
 
 
-def load_simulation_data(provider, start, end, review_weekday=0):
+def load_simulation_data(reader, start, end, review_weekday=0):
     """Read the cohort orderable at `start` and its positions/snapshots through `end` (SELECT only)."""
     start, end = as_date(start), as_date(end)
     if end <= start:
-        raise MMSValidationError("Simulation end must follow its start")
+        raise MMSError("Simulation end must follow its start")
     cohort = ("SELECT product_id FROM {db}.fct_product_replenishment_snapshot "
               "WHERE snapshot_date = {start:Date} AND is_orderable = 1")
     params = {"start": start, "end": end}
-    positions = pd.DataFrame(provider._query(
+    positions = pd.DataFrame(reader.query(
         "SELECT product_id, position_date, toFloat64(greatest(sold_qty, 0)) AS sold, "
         "toFloat64(greatest(pharmacy_on_hand_qty, 0)) AS stock "
         "FROM {db}.fct_product_daily_position "
         "WHERE position_date BETWEEN {start:Date} AND {end:Date} AND product_id IN (" + cohort + ")", params))
-    snapshots = pd.DataFrame(provider._query(
+    snapshots = pd.DataFrame(reader.query(
         "SELECT product_id, snapshot_date, avg_daily_sold_qty_90d AS mean_daily, sold_qty_std_90d AS std_daily, "
         "unit_sales_value_90d AS unit_value, abc_class "
         "FROM {db}.fct_product_replenishment_snapshot "
         "WHERE snapshot_date BETWEEN {start:Date} AND {end:Date} AND toDayOfWeek(snapshot_date) = {weekday:UInt8} "
         "AND product_id IN (" + cohort + ")", params | {"weekday": review_weekday + 1}))
     if positions.empty or snapshots.empty:
-        raise MMSValidationError(f"No orderable cohort or positions between {start} and {end}")
+        raise MMSError(f"No orderable cohort or positions between {start} and {end}")
     days = tuple(start + timedelta(days=i) for i in range((end - start).days + 1))
     products = tuple(sorted(positions.product_id.unique()))
     positions["position_date"] = positions.position_date.map(as_date)
@@ -116,7 +116,7 @@ def simulate(data, spec, review_days=7, lead_time_days=2, impute_censored=False)
     """Replay one policy; returns service and inventory metrics over the period."""
     lead = int(lead_time_days)
     if lead < 0 or lead != lead_time_days:
-        raise MMSValidationError("lead_time_days must be a nonnegative integer in simulation")
+        raise MMSError("lead_time_days must be a nonnegative integer in simulation")
     first_mean = data.mean_daily[min(data.mean_daily)]
     demand = data.demand
     if impute_censored:

@@ -15,6 +15,7 @@ Run from the repository root with the [services](../infra/README.md) running. Bu
 | [Python publication](extraction/README.md) | Extractor failure/lock/retry boundary in disposable databases | Inspect its temporary test logs and recovery scope, not production data |
 | [Python reference](uom/README.md) | Immutable byte checksums and exact seed union; compiled UOM failure fixtures | Restore altered references or fix version publication, not expected checksum values |
 | [Python mart regression](marts/README.md) | Proves compiled tests reject orphan/fan-out/NULL/schema faults | Ensure the pinned full build produced compiled contracts first |
+| MMS (`tests/mms`) | Policy and quantile arithmetic, plan ranking/budget, mart mapping, training labels, backtest metrics, policy replay, decision store and app flows on in-memory fixtures | Run `pytest tests/mms`; no database is needed |
 | [Optional bootstrap](oltp_ingestion/README.md) | CSV parsers, deterministic partitions and transactional upsert/rollback | Reproduce only in the disposable database; do not reload operational OLTP |
 
 Not-null, uniqueness, relationships, source-preservation and JOIN-cardinality checks are distinct. A LEFT JOIN can preserve an orphan while an FK test rejects it; a duplicate parent can multiply rows while an orphan check passes. Full acceptance needs all of them.
@@ -44,6 +45,7 @@ uv run --locked python tests/uom/integration.py
 uv run --locked python tests/marts/integration.py
 uv run --locked python tests/extraction/integration.py
 uv run --locked --group bootstrap python tests/oltp_ingestion/integration.py
+uv run --locked --extra ui --group dev pytest tests/mms
 ```
 
 Unit tests require no running databases. Staging integration compiles a temporary fixture from the real macros, then evaluates its cases with SELECTs; dbt connection probes may create/drop temporary probe tables. Other integration scripts create uniquely named disposable databases, inject their own fixtures and clean them up. Extraction integration runs its own staging dbt selection in a temporary project; it does not extract into production raw. Bootstrap integration starts existing services if needed but loads only its disposable database. Do not run production `load postgres` or `load raw` as a substitute for these isolated fixtures.

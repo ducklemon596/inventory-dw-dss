@@ -1,37 +1,33 @@
-"""Stockout-risk targets shared by training, backtesting and the UI.
+"""What the risk score predicts. Training and backtests use the same definitions.
 
-dispensary_stockout: the dispensary balance reaches zero in (T, T+h]. It also reflects how
-    promptly staff refilled the shelf, so it partly measures past actions rather than risk.
-pharmacy_shortfall: sales in (T, T+h] reach all stock held at T (dispensary + storeroom), so the
-    pharmacy would run out without a new receipt. This is the target for purchase decisions.
+pharmacy_shortfall (recommended): sales over the next h days reach all stock held at T
+    (dispensary + storeroom), so the pharmacy runs out unless it buys. This is the event a
+    purchase decision prevents.
+dispensary_stockout: the dispensary balance reaches zero within h days. It also depends on how
+    quickly staff refilled the shelf from the storeroom, so it partly measures past actions.
 """
-from ..core.schemas import MMSValidationError
+from ..schemas import MMSError
 
-RISK_TARGETS = ("dispensary_stockout", "pharmacy_shortfall")
-DEFAULT_TARGET = "dispensary_stockout"  # artifacts trained before targets existed
+RISK_TARGETS = ("pharmacy_shortfall", "dispensary_stockout")
 LABEL_DEFINITIONS = {
-    "dispensary_stockout": "any verified stockout in (T,T+horizon]; existing zero/negative balances excluded",
-    "pharmacy_shortfall": "sales in (T,T+horizon] >= available stock at T; products without stock excluded",
+    "pharmacy_shortfall": "sales in (T, T+h] >= available stock at T; products without stock excluded",
+    "dispensary_stockout": "dispensary balance <= 0 on a day in (T, T+h]; products with an empty shelf excluded",
 }
 
 
 def check_target(target):
     if target not in RISK_TARGETS:
-        raise MMSValidationError(f"risk target must be one of {RISK_TARGETS}")
+        raise MMSError(f"risk target must be one of {RISK_TARGETS}")
     return target
 
 
-def model_target(risk_model):
-    """Target declared by an artifact manifest; older artifacts predate the field."""
-    return check_target(getattr(risk_model, "manifest", {}).get("risk_target", DEFAULT_TARGET))
-
-
 def target_stock(row, target):
-    """Stock whose depletion the target measures; rows at or below zero are not at risk, already out."""
-    return row.risk_stock if target == "dispensary_stockout" else row.available_stock
+    """Stock whose depletion the target measures. Products at or below zero are already out."""
+    return row.available_stock if target == "pharmacy_shortfall" else row.dispensary_stock
 
 
 def target_label(row, window, target):
-    if target == "dispensary_stockout":
-        return int(any(o.stockout for o in window))
-    return int(sum(o.sales_quantity for o in window) >= row.available_stock)
+    """1 if the event happened in the observed window (sequence of Observation), else 0."""
+    if target == "pharmacy_shortfall":
+        return int(sum(o.sales_quantity for o in window) >= row.available_stock)
+    return int(any(o.stockout for o in window))

@@ -7,6 +7,7 @@ The installed entrypoint is `inventory-dw-dss`, declared in [pyproject.toml](../
 | Optional source CSV → PostgreSQL | [PostgreSQL loader](oltp_ingestion/README.md) |
 | PostgreSQL → ClickHouse raw | Commands below |
 | ClickHouse raw → dbt marts/tests | [Transformations](../../transform/dbt/README.md) |
+| Marts → risk scores, order plans, app | [MMS](mms/README.md) (`inventory-mms`) |
 
 ## ClickHouse raw prerequisites
 
