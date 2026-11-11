@@ -32,6 +32,8 @@ The Marts layer exposes four dimensions and three facts. Product, warehouse and 
 | `fct_sales_line` | One source sales line / `sales_invoice_line_id`; lineage key `(dataset_name, dataset_row_number)` | Product × original unit × sold date; no warehouse FK |
 | `fct_inventory_movement` | One source movement / `inventory_movement_id` | Product × warehouse × movement date and recorded quantity units |
 | `fct_inventory_daily_observed` | Dataset × product × warehouse × observed date | One selected recorded closing observation per observed day |
+| `fct_product_daily_position` | Dataset × product × calendar date | Dense dispensary/storeroom stock, daily flow roles and sales value |
+| `fct_product_replenishment_snapshot` | Dataset × product × snapshot date | Point-in-time DSS features and forward stockout/sales labels |
 
 ```mermaid
 erDiagram
@@ -46,8 +48,14 @@ erDiagram
     dim_date ||--o{ fct_sales_line : sold_date
     dim_date ||--o{ fct_inventory_movement : movement_date
     dim_date ||--o{ fct_inventory_daily_observed : observation_date
+    dim_product ||--o{ fct_product_daily_position : product_id
+    dim_unit ||--o{ fct_product_daily_position : stock_unit_id
+    dim_date ||--o{ fct_product_daily_position : position_date
+    dim_product ||--o{ fct_product_replenishment_snapshot : product_id
+    dim_unit ||--o{ fct_product_replenishment_snapshot : stock_unit_id
+    dim_date ||--o{ fct_product_replenishment_snapshot : snapshot_date
 ```
 
-`dim_product` uses current Type 1 catalog attributes; it does not recreate past catalog states. `fct_sales_line` retains all 57 columns from the governed sales conversion model, including original values and mapping provenance. Its only representation change maps missing stock-unit evidence to `dim_unit` key `0` (`NOT_VERIFIED_STOCK_UNIT`); the upstream evidence remains NULL and this member is not a physical unit or conversion approval. Candidate, quarantined and unmapped converted quantities remain NULL. Inventory facts preserve the source rows, their recorded order, segment anchors and observation quality flags. Missing observation dates are not generated.
+`dim_product` uses current Type 1 catalog attributes; it does not recreate past catalog states. `fct_sales_line` retains all 57 columns from the governed sales conversion model, including original values and mapping provenance. Its only representation change maps missing stock-unit evidence to `dim_unit` key `0` (`NOT_VERIFIED_STOCK_UNIT`); the upstream evidence remains NULL and this member is not a physical unit or conversion approval. Candidate, quarantined and unmapped converted quantities remain NULL. Inventory facts preserve the source rows, their recorded order, segment anchors and observation quality flags. Missing observation dates are not generated there. The two replenishment facts are dense by design: they carry ledger balances forward under the rules in [data semantics](data-semantics.md#replenishment-rules).
 
 Facts do not relate sales to inventory by individual movement. Compare separately aggregated product/date/unit scopes only when units are compatible; warehouse-level demand cannot be attributed from this source. The [business semantics](data-semantics.md) page explains measure interpretation and aggregation limits.

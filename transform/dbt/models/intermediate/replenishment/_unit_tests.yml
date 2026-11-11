@@ -1,0 +1,44 @@
+version: 2
+
+unit_tests:
+  - name: daily_position_carries_balance_forward_to_export_end
+    model: int_inventory_daily_position
+    description: >-
+      Days without movements keep the last closing and zero flows; every ledger runs to the dataset's last movement
+      date, including a ledger that starts later.
+    given:
+      - input: ref('int_inventory_daily_flows')
+        rows:
+          - dataset_name: fixture
+            product_id: 1
+            warehouse_id: 1
+            position_date: '2024-03-01'
+            closing_stock_quantity: '10'
+            stock_unit_id: 7
+            sold_qty: '2'
+            movement_count: 2
+          - dataset_name: fixture
+            product_id: 1
+            warehouse_id: 1
+            position_date: '2024-03-04'
+            closing_stock_quantity: '25'
+            stock_unit_id: 7
+            purchase_received_qty: '15'
+            has_purchase_receipt: 1
+            movement_count: 1
+          - dataset_name: fixture
+            product_id: 2
+            warehouse_id: 1
+            position_date: '2024-03-03'
+            closing_stock_quantity: '-1'
+            stock_unit_id: 8
+            sold_qty: '1'
+            movement_count: 1
+    expect:
+      rows:
+        - {product_id: 1, position_date: '2024-03-01', on_hand_qty: '10', sold_qty: '2', has_movement: 1}
+        - {product_id: 1, position_date: '2024-03-02', on_hand_qty: '10', sold_qty: '0', has_movement: 0}
+        - {product_id: 1, position_date: '2024-03-03', on_hand_qty: '10', sold_qty: '0', has_movement: 0}
+        - {product_id: 1, position_date: '2024-03-04', on_hand_qty: '25', sold_qty: '0', has_movement: 1}
+        - {product_id: 2, position_date: '2024-03-03', on_hand_qty: '-1', sold_qty: '1', has_movement: 1}
+        - {product_id: 2, position_date: '2024-03-04', on_hand_qty: '-1', sold_qty: '0', has_movement: 0}

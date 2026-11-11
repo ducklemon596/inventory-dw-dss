@@ -1,0 +1,31 @@
+version: 2
+
+unit_tests:
+  - name: snapshot_labels_look_forward_and_stay_null_past_export_end
+    model: fct_product_replenishment_snapshot
+    description: >-
+      The 7-day label checks only later dates, reacts to a stockout on day T+7 and is NULL when fewer than seven
+      later dates exist. Features include the snapshot date itself.
+    given:
+      - input: ref('fct_product_daily_position')
+        rows:
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-01', dispensary_on_hand_qty: '0', pharmacy_on_hand_qty: '0', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 1}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-02', dispensary_on_hand_qty: '9', pharmacy_on_hand_qty: '9', sold_qty: '2', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-03', dispensary_on_hand_qty: '8', pharmacy_on_hand_qty: '8', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-04', dispensary_on_hand_qty: '6', pharmacy_on_hand_qty: '6', sold_qty: '2', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-05', dispensary_on_hand_qty: '5', pharmacy_on_hand_qty: '5', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-06', dispensary_on_hand_qty: '3', pharmacy_on_hand_qty: '3', sold_qty: '2', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-07', dispensary_on_hand_qty: '2', pharmacy_on_hand_qty: '2', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-08', dispensary_on_hand_qty: '1', pharmacy_on_hand_qty: '1', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 0}
+          - {dataset_name: fixture, product_id: 1, position_date: '2024-03-09', dispensary_on_hand_qty: '0', pharmacy_on_hand_qty: '0', sold_qty: '1', is_consignment: 0, has_dispensary_ledger: 1, is_dispensary_stockout: 1}
+    expect:
+      rows:
+        - {snapshot_date: '2024-03-01', sold_qty_7d: '1', label_dispensary_stockout_7d: 0, label_sold_qty_7d: '10'}
+        - {snapshot_date: '2024-03-02', sold_qty_7d: '3', label_dispensary_stockout_7d: 1, label_sold_qty_7d: '9'}
+        - {snapshot_date: '2024-03-03', sold_qty_7d: '4', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-04', sold_qty_7d: '6', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-05', sold_qty_7d: '7', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-06', sold_qty_7d: '9', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-07', sold_qty_7d: '10', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-08', sold_qty_7d: '10', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}
+        - {snapshot_date: '2024-03-09', sold_qty_7d: '9', label_dispensary_stockout_7d: null, label_sold_qty_7d: null}

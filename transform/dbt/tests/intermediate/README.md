@@ -1,6 +1,6 @@
 # Intermediate reconciliation
 
-Sales tests compare enrichment and original-unit daily grouping with source rows. Inventory tests check opening + received - issued = closing, exact predecessor identity/sequence/units, segment anchors/ranges/cumulative reconstruction and complete discontinuity diagnostics. Generic preservation compares all parent fields, including NULL distinctions.
+Sales tests compare enrichment and original-unit daily grouping with source rows. Inventory tests check opening + received - issued = closing, exact predecessor identity/sequence/units, segment anchors/ranges/cumulative reconstruction and complete discontinuity diagnostics. The replenishment position test requires contiguous dates, agreement with every observed closing and an exact daily roll-forward. Generic preservation compares all parent fields, including NULL distinctions.
 
 **Failure interpretation:** Inspect the exact dataset/product/warehouse ledger in source order. A real discontinuity is retained, not automatically repaired. An arithmetic/preservation failure is different from an expected gap flag.
 

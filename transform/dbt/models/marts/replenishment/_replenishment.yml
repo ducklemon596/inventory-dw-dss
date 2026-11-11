@@ -1,0 +1,340 @@
+version: 2
+
+models:
+  - name: fct_product_daily_position
+    description: >-
+      One dataset, product and calendar date with pharmacy-level stock split into dispensary and storeroom balances,
+      daily flows, sales value and stockout status.
+
+    config:
+      meta:
+        grain:
+          - dataset_name
+          - product_id
+          - position_date
+        assumptions:
+          - The dispensary (var replenishment_dispensary_warehouse_id) is the only point of sale.
+          - A warehouse holds no stock of a product before its first recorded movement.
+          - Stockout means a dispensary closing balance at or below zero.
+        limitations:
+          - Balances are recorded, not physical counts; negative balances usually indicate late receipt postings.
+
+    columns:
+      - name: dataset_name
+        description: Source dataset that scopes the inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_id
+
+      - name: position_date
+        description: Calendar date of the position; dense from the product's first movement to the export end date.
+        data_type: Date32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: calendar_date
+
+      - name: stock_unit_id
+        description: Stock unit shared by all quantities of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: is_consignment
+        description: Whether the product is held on consignment (KONSINYASI) according to its latest movement.
+        data_type: UInt8
+
+      - name: dispensary_on_hand_qty
+        description: Closing balance at the dispensary, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: storeroom_on_hand_qty
+        description: Closing balance across all other warehouses, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: pharmacy_on_hand_qty
+        description: Dispensary plus storeroom closing balance, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: sold_qty
+        description: Net quantity issued by sales on the date, in the stock unit. Recorded sales, not unconstrained demand.
+        data_type: Decimal(38, 6)
+
+      - name: customer_return_qty
+        description: Net quantity returned by customers on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: purchase_received_qty
+        description: Net quantity received from suppliers on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: transfer_to_dispensary_qty
+        description: Quantity transferred into the dispensary from storerooms on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: adjustment_qty
+        description: Net stocktake, import and UNKNOWN movements across warehouses on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: balance_gap_qty
+        description: Balance correction from ledger discontinuities across warehouses on the date, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: sales_amount
+        description: >-
+          Sum of sales line subtotals (after line discounts) on the date, in source currency. Excludes invoice-level
+          fees and discounts.
+        data_type: Decimal(18, 6)
+
+      - name: sales_line_count
+        description: Number of recorded sales lines on the date.
+        data_type: UInt32
+
+      - name: has_dispensary_ledger
+        description: Whether the product has a dispensary ledger by the date; without one it cannot be sold.
+        data_type: UInt8
+
+      - name: is_dispensary_stockout
+        description: Whether the dispensary closing balance is at or below zero.
+        data_type: UInt8
+
+      - name: is_pharmacy_stockout
+        description: Whether the combined dispensary and storeroom closing balance is at or below zero.
+        data_type: UInt8
+
+      - name: has_negative_on_hand
+        description: Whether any warehouse closing balance is negative.
+        data_type: UInt8
+
+      - name: has_purchase_receipt
+        description: Whether any supplier quantity was received on the date.
+        data_type: UInt8
+
+      - name: has_stocktake
+        description: Whether a stocktake posting occurred in any warehouse on the date.
+        data_type: UInt8
+
+      - name: movement_count
+        description: Number of recorded movements across warehouses on the date.
+        data_type: UInt32
+    data_tests:
+      - matches_declared_schema
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - position_date
+
+  - name: fct_product_replenishment_snapshot
+    description: >-
+      One dataset, product and snapshot date with point-in-time demand, stock and service features plus forward
+      stockout and sales labels. The input table for DSS risk models, coverage rules and backtests.
+
+    config:
+      meta:
+        grain:
+          - dataset_name
+          - product_id
+          - snapshot_date
+        assumptions:
+          - Features use positions up to and including snapshot_date; labels use only later dates.
+          - Labels are NULL until the whole horizon is covered by the export.
+        limitations:
+          - Sales measure recorded issues; demand lost during stockouts is not observed.
+          - Windows overlapping a stocktake carry corrections that are flagged, not removed.
+
+    columns:
+      - name: dataset_name
+        description: Source dataset that scopes the inventory ledger.
+        data_type: LowCardinality(String)
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: Identifier of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_id
+
+      - name: snapshot_date
+        description: Decision date T; the state is taken at the end of this date.
+        data_type: Date32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: calendar_date
+
+      - name: stock_unit_id
+        description: Stock unit shared by all quantities of the product.
+        data_type: UInt32
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_unit')
+                field: unit_id
+
+      - name: is_consignment
+        description: Whether the product is held on consignment according to its latest movement up to T.
+        data_type: UInt8
+
+      - name: dispensary_on_hand_qty
+        description: Dispensary closing balance at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: storeroom_on_hand_qty
+        description: Storeroom closing balance at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: pharmacy_on_hand_qty
+        description: Combined closing balance at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: available_qty
+        description: Combined closing balance at T floored at zero; negative recorded stock cannot be sold.
+        data_type: Decimal(38, 6)
+
+      - name: sold_qty_7d
+        description: Sold quantity over the 7 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: sold_qty_30d
+        description: Sold quantity over the 30 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: sold_qty_90d
+        description: Sold quantity over the 90 days ending at T, in the stock unit. Shorter histories cover fewer days.
+        data_type: Decimal(38, 6)
+
+      - name: sale_days_90d
+        description: Number of days with sales in the 90 days ending at T; measures demand intermittency.
+        data_type: UInt8
+
+      - name: avg_daily_sold_qty_90d
+        description: 90-day moving average of daily sold quantity (sold_qty_90d / 90), in stock units per day.
+        data_type: Float64
+
+      - name: sales_amount_90d
+        description: Sales line subtotal over the 90 days ending at T, in source currency.
+        data_type: Decimal(38, 6)
+
+      - name: unit_sales_value_90d
+        description: Sales amount per sold stock unit over 90 days; a price proxy for value budgets. NULL without sales.
+        data_type: Nullable(Float64)
+
+      - name: pharmacy_days_of_supply
+        description: Days the available quantity covers at the 90-day average rate. NULL without sales.
+        data_type: Nullable(Float64)
+
+      - name: dispensary_days_of_supply
+        description: Days the dispensary balance (floored at zero) covers at the 90-day average rate. NULL without sales.
+        data_type: Nullable(Float64)
+
+      - name: days_since_last_sale
+        description: Days from the latest date with sales up to T. NULL if the product has never sold.
+        data_type: Nullable(UInt32)
+
+      - name: days_since_last_receipt
+        description: Days from the latest supplier receipt up to T. NULL if nothing has been received.
+        data_type: Nullable(UInt32)
+
+      - name: purchase_receipt_days_90d
+        description: Number of days with supplier receipts in the 90 days ending at T.
+        data_type: UInt8
+
+      - name: transfer_to_dispensary_qty_30d
+        description: Quantity moved from storerooms into the dispensary over the 30 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: dispensary_stockout_days_90d
+        description: Number of days with a dispensary stockout in the 90 days ending at T.
+        data_type: UInt8
+
+      - name: history_days
+        description: Days between the product's first recorded movement and T.
+        data_type: UInt32
+
+      - name: has_stocktake_90d
+        description: Whether a stocktake posting occurred in the 90 days ending at T.
+        data_type: UInt8
+
+      - name: is_active_90d
+        description: Whether the product sold anything in the 90 days ending at T.
+        data_type: UInt8
+
+      - name: has_full_history
+        description: Whether at least 90 days of history end at T, so 90-day features are complete.
+        data_type: UInt8
+
+      - name: is_orderable
+        description: Whether the product is active, not on consignment and stocked at the dispensary; the order cohort.
+        data_type: UInt8
+
+      - name: label_dispensary_stockout_7d
+        description: Whether the dispensary balance reaches zero or below on any day in (T, T+7].
+        data_type: Nullable(UInt8)
+
+      - name: label_sold_qty_7d
+        description: Sold quantity in (T, T+7], in the stock unit.
+        data_type: Nullable(Decimal(38, 6))
+
+      - name: label_window_has_stocktake_7d
+        description: Whether (T, T+7] contains a stocktake posting; such windows can be excluded from evaluation.
+        data_type: Nullable(UInt8)
+
+      - name: label_dispensary_stockout_14d
+        description: Whether the dispensary balance reaches zero or below on any day in (T, T+14].
+        data_type: Nullable(UInt8)
+
+      - name: label_sold_qty_14d
+        description: Sold quantity in (T, T+14], in the stock unit.
+        data_type: Nullable(Decimal(38, 6))
+
+      - name: label_window_has_stocktake_14d
+        description: Whether (T, T+14] contains a stocktake posting.
+        data_type: Nullable(UInt8)
+
+      - name: label_dispensary_stockout_30d
+        description: Whether the dispensary balance reaches zero or below on any day in (T, T+30].
+        data_type: Nullable(UInt8)
+
+      - name: label_sold_qty_30d
+        description: Sold quantity in (T, T+30], in the stock unit.
+        data_type: Nullable(Decimal(38, 6))
+
+      - name: label_window_has_stocktake_30d
+        description: Whether (T, T+30] contains a stocktake posting.
+        data_type: Nullable(UInt8)
+    data_tests:
+      - matches_declared_schema
+      - unique_grain:
+          arguments:
+
+            columns:
+              - dataset_name
+              - product_id
+              - snapshot_date
