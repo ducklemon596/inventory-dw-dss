@@ -25,25 +25,25 @@ and the injected-runtime embedding interface are preserved.
 
 ## Workflow
 
-1. Select the analysis date and 1–4 scenarios in the sidebar. Each has its own
-   ranking profile, risk threshold, K, target coverage and unit budget Q.
-2. Click **Chạy phương án**. All compared plans use one snapshot and risk vector.
-   Select the working scenario above the four summary cards.
-3. **Danh sách xem xét** includes investigation alerts even when suggested q=0.
-   Search affects the displayed table; the clearly labelled full-list CSV exports
-   the original plan, with date/profile in its filename.
-4. **Đề xuất đặt hàng** contains eligible positive allocations and shows Q use.
-   Q denotes product-specific units, not money or a purchasing-cost estimate.
-5. **So sánh** shows quantities, constraints and pairwise SKU overlap. Risk scores
-   are displayed on a 0–1 scale, without implying calibrated probabilities.
-6. **Quyết định** records accepted/rejected/edited/pending actions. A note may be
-   saved while the item is still pending. Bulk approval only marks rows with
-   positive allocated quantities; it never submits a purchase order.
-7. **Kiểm định** runs independent 7/14/30-day outcome windows, displays per-date
-   status/metrics and keeps the report through ordinary widget reruns. The report
-   states the horizon that was actually evaluated, even if controls are edited.
-8. **Phiên đã lưu** reopens exact results, configuration, actions and notes. A
-   historical follow-up checks data-version compatibility before reading observations.
+The main workflow was simplified on 2026-11-11. See
+[the current screen guide](mms-simple-ui.md): one scenario by default, three
+primary tabs, plain-language allocation explanations and collapsed advanced
+tools.
+
+1. Select the date, target days of stock and total quantity that can be allocated.
+   Click **Xem đề xuất nhập hàng**. Three cards summarize item counts and quantity.
+2. **Hàng cần chú ý** shows the priority list with days of stock and allocation
+   explanations. Search filters the visible table; CSV exports the full list.
+3. **Xác nhận lượng nhập** shows allocated items and accepts, rejects, edits or
+   records notes. Bulk approval marks only positive allocations. Saving does not
+   submit a purchase order.
+4. **Lịch sử đã lưu** reopens exact results and actions. Historical follow-up
+   checks data-version compatibility before reading observations.
+5. **Tùy chỉnh nâng cao** in the sidebar enables 1–4 scenarios, ranking profiles,
+   risk thresholds and quantity limits. Q denotes SKU-specific units, not money.
+6. The collapsed advanced section below results retains comparison, pairwise
+   overlap, exact scores and 7/14/30-day backtests. Scores are not calibrated
+   probabilities. Backtests retain the actual evaluated horizon across reruns.
 
 Changing scenario controls marks the old plan as stale and disables saving or
 evaluation until rerun. Starting a new run clears manager drafts; switching
@@ -57,9 +57,9 @@ and JSON downloads without putting raw payloads in the primary workflow.
 
 ## Layout and verification
 
-Desktop uses a teal parameter sidebar, light metric cards, risk/quantity charts
-and native tables. At mobile widths, metric cards form a two-column grid and the
-sidebar collapses. Tables retain their own horizontal scrolling.
+Desktop uses a teal parameter sidebar, three metric cards and native tables.
+At mobile widths, metric cards form two columns with the third card full width,
+and the sidebar collapses. Tables retain their own horizontal scrolling.
 
 The UI/presenter/tracking checks cover source switches, stale parameters, pending
 notes, persisted backtests, per-scenario manager drafts, zero budgets and numeric

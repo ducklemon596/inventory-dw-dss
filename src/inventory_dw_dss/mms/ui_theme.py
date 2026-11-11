@@ -34,14 +34,17 @@ def apply_theme():
     [data-testid="stDataFrame"] {border-radius:12px;overflow:hidden;}
     .mms-eyebrow {font-size:.72rem;letter-spacing:.19em;font-weight:750;color:#087f82;margin-bottom:.4rem;}
     .mms-brand {font-size:1.3rem;font-weight:750;letter-spacing:-.03em;color:#fff;}
+    .mms-start-icon {display:flex;align-items:center;justify-content:center;width:64px;height:64px;
+        border-radius:18px;background:#e5f3f2;color:#087f82;font-size:2.6rem;margin:.8rem 0 1rem;}
     .mms-empty {background:#fff;border:1px dashed #bacfd4;border-radius:18px;padding:2rem;text-align:center;}
     .mms-empty p {color:#637980;max-width:550px;margin:.5rem auto;}
     @media(max-width:700px) {
-      .block-container {padding:1.4rem 1rem;}
+      .block-container {padding:3.5rem 1rem 1.4rem;}
       h1 {font-size:1.9rem!important;}
       [data-testid="stMetric"] {padding:.8rem;}
       [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;}
       [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="stColumn"] {min-width:0!important;width:auto!important;}
+      [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="stColumn"]:last-child:nth-child(3) {grid-column:1 / -1;}
       [data-testid="stMetricValue"] {font-size:1.6rem;}
       [data-testid="stTabs"] [role="tablist"] {gap:.6rem;}
     }

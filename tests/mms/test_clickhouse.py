@@ -56,6 +56,17 @@ def test_same_contract_as_mock_and_bound_selects_only():
     assert all(p["release_id"] == "r1" for _, p in client.queries)
 
 
+def test_date_discovery_checks_approved_release_and_binds_version():
+    client=Client()
+    assert ClickHouseDataProvider(client,'inventory_dw','r1').snapshot_dates()==(T,)
+    assert client.metadata_reads==2
+    assert any('DISTINCT analysis_date' in sql and p['data_version']=='export-v1' for sql,p in client.queries)
+    client=Client()
+    client.change_release=True
+    with pytest.raises(MMSValidationError,match='changed'):
+        ClickHouseDataProvider(client,'inventory_dw','r1').snapshot_dates()
+
+
 @pytest.mark.parametrize("field,value", [("available_stock_verified", 0), ("units_verified", "true"),
     ("daily_sales_verified", None), ("sop_rules_verified", 0), ("approved_by", ""),
     ("approval_reference", ""), ("location_scope", "Apotek"), ("schema_version", "old")])

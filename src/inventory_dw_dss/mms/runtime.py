@@ -72,6 +72,10 @@ class ManagedClickHouseProvider:
         with closing(self.settings.connect_clickhouse()) as client:
             return ClickHouseDataProvider(client, self.settings.database, self.settings.release_id).get_snapshot(analysis_date, filters)
 
+    def snapshot_dates(self):
+        with closing(self.settings.connect_clickhouse()) as client:
+            return ClickHouseDataProvider(client, self.settings.database, self.settings.release_id).snapshot_dates()
+
     def get_outcomes(self):
         with closing(self.settings.connect_clickhouse()) as client:
             return ClickHouseDataProvider(client, self.settings.database, self.settings.release_id).get_outcomes()

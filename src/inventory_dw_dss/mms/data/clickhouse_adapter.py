@@ -69,6 +69,15 @@ class ClickHouseDataProvider:
         if any(r.get("release_id") != self.release_id for r in rows):
             raise MMSValidationError("Mixed ClickHouse release rows")
 
+    def snapshot_dates(self):
+        metadata = self._release()
+        rows = query_rows(self.client,
+            f"SELECT DISTINCT analysis_date FROM {self.database}.`mms_inventory_daily` "
+            "WHERE release_id = {release_id:String} AND data_version = {data_version:String} ORDER BY analysis_date",
+            {"release_id":self.release_id,"data_version":metadata["data_version"]})
+        self._unchanged(metadata)
+        return tuple(sorted({as_date(row["analysis_date"]) for row in rows}))
+
     def get_snapshot(self, analysis_date, filters=None):
         t = as_date(analysis_date)
         metadata = self._release()

@@ -12,6 +12,17 @@ class DuckDBDataProvider:
     def __init__(self, connection):
         self.connection = connection
 
+    def snapshot_dates(self):
+        import duckdb
+        try:
+            if isinstance(self.connection, (str, Path)):
+                with duckdb.connect(str(self.connection), read_only=True) as connection:
+                    return DuckDBDataProvider(connection).snapshot_dates()
+            return tuple(as_date(row[0]) for row in self.connection.execute(
+                "SELECT DISTINCT analysis_date FROM mms_inventory_daily ORDER BY analysis_date").fetchall())
+        except duckdb.Error as exc:
+            raise MMSValidationError(f"Cannot read snapshot dates: {exc}") from exc
+
     def get_snapshot(self, analysis_date, filters=None):
         import duckdb
         try:

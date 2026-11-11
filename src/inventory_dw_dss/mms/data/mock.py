@@ -19,6 +19,9 @@ class MockDataProvider:
         for row in self._sales:
             self._sales_by_sku.setdefault(row["sku_id"], []).append(row)
 
+    def snapshot_dates(self):
+        return tuple(sorted({as_date(row["analysis_date"]) for row in self._inventory}))
+
     def get_snapshot(self, analysis_date, filters=None):
         t = as_date(analysis_date)
         filters = filters or {}

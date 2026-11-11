@@ -27,8 +27,11 @@ def test_streamlit_compare_save_reopen_and_parameter_changes(tmp_path, monkeypat
         monkeypatch.delenv(key, raising=False)
     app = AppTest.from_file(str(Path(__file__).parents[2] / "src/inventory_dw_dss/mms/ui.py"), default_timeout=20).run()
     assert not app.exception
-    assert app.title[0].value == "Lập kế hoạch tồn kho"
-    assert app.button(key="run_scenarios").label == "Chạy phương án"
+    assert app.title[0].value == "Replenishment"
+    assert app.button(key="run_scenarios").label == "View plan"
+    assert not any("Dữ liệu mô phỏng" in message.value or "Chỉ dùng thử" in message.value for message in app.caption)
+    assert not any("Chọn thông tin bên trái" in message.value for message in app.info)
+    assert app.selectbox(key="scenario_count").value == 1
     app.button(key="run_scenarios").click().run()
     assert not app.exception
     assert len(app.dataframe) >= 4  # independent Review/Order for two scenarios
@@ -36,10 +39,10 @@ def test_streamlit_compare_save_reopen_and_parameter_changes(tmp_path, monkeypat
     app.number_input(key="edit_0_B").set_value(3)
     app.button(key="save_decision").click().run()
     assert not app.exception
-    assert any("Đã lưu quyết định" in msg.value for msg in app.success)
+    assert any("Decision saved" in msg.value for msg in app.success)
     app.button(key="reopen_session").click().run()
     assert not app.exception
-    assert any("Quyết định đã lưu" in h.value for h in app.subheader)
+    assert any("Saved decision" in h.value for h in app.subheader)
     app.number_input(key="q_0").set_value(0)
     app.button(key="run_scenarios").click().run()
     assert not app.exception
@@ -132,6 +135,7 @@ def test_manager_drafts_survive_switching_comparison_scenarios(tmp_path,monkeypa
     monkeypatch.setenv("MMS_DATA_SOURCE","demo")
     monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"drafts.sqlite"))
     app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.selectbox(key="scenario_count").set_value(2).run()
     app.button(key="run_scenarios").click().run()
     app.button(key="approve_allocated").click().run()
     app.selectbox(key="action_0_B").set_value("edited")
@@ -143,3 +147,63 @@ def test_manager_drafts_survive_switching_comparison_scenarios(tmp_path,monkeypa
     assert app.selectbox(key="action_0_B").value == "edited"
     assert app.number_input(key="edit_0_B").value == 3
     assert app.text_input(key="note_0_B").value == "Giữ ghi chú khi so sánh"
+
+
+def test_simple_workflow_retains_advanced_evaluation_and_explains_limits(tmp_path,monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"simple.sqlite"))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.number_input(key="q_0").set_value(0)
+    app.button(key="run_scenarios").click().run()
+    assert not app.exception
+    assert [tab.label for tab in app.tabs[:3]] == ["Review","Approve","History"]
+    assert len(app.metric)==3
+    assert app.session_state['comparison'].results[0].summary['units_allocated']==0
+    frame=app.dataframe[0].value
+    assert 'advice' in frame.columns
+    assert any(text=='Limit reached' for text in frame['advice'])
+    app.button(key="evaluate").click().run()
+    assert not app.exception
+    assert '_mms_backtest' in app.session_state
+
+
+def test_unlimited_mode_disables_visible_quantity_and_explains_override(tmp_path,monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/"unlimited.sqlite"))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    app.checkbox(key="unlimited_0").check().run()
+    assert app.number_input(key="q_0").disabled
+    assert any('Unlimited quantity' in msg.value for msg in app.info)
+    app.button(key="run_scenarios").click().run()
+    assert not app.exception
+    assert app.session_state['comparison'].results[0].config.unit_budget_q is None
+    app.checkbox(key="unlimited_0").uncheck().run()
+    assert not app.number_input(key="q_0").disabled
+    assert app.button(key="save_decision").disabled
+
+
+def test_start_screen_has_overview_and_create_plan_action(tmp_path,monkeypatch):
+    monkeypatch.setenv("MMS_DATA_SOURCE","demo")
+    monkeypatch.setenv("MMS_DECISIONS_PATH",str(tmp_path/'start.sqlite'))
+    app=AppTest.from_file(str(Path(__file__).parents[2]/"src/inventory_dw_dss/mms/ui.py"),default_timeout=20).run()
+    assert not app.exception
+    assert len(app.metric)==3
+    from datetime import date
+    assert app.date_input(key="analysis_date").value==date(2025,6,30)
+    assert app.date_input(key="analysis_date").min==date(2025,6,30)
+    assert app.date_input(key="analysis_date").max==date(2025,6,30)
+    app.button(key="create_plan").click().run()
+    assert not app.exception
+    assert 'comparison' in app.session_state
+
+
+def test_planning_dates_preserve_gaps_and_exclude_training_future(monkeypatch):
+    from datetime import date
+    from types import SimpleNamespace
+    from inventory_dw_dss.mms import ui
+    monkeypatch.setattr(ui.st,'session_state',{})
+    dates=(date(2025,6,2),date(2025,6,3),date(2025,6,10))
+    runtime=SimpleNamespace(service=SimpleNamespace(
+        provider=SimpleNamespace(snapshot_dates=lambda:dates),
+        executor=SimpleNamespace(risk_model=SimpleNamespace(manifest={'supervised_data_cutoff':'2025-06-03'}))))
+    assert ui.planning_dates(runtime)==dates[1:]

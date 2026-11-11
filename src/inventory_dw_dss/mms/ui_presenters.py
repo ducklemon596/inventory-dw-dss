@@ -7,12 +7,12 @@ import json
 from .core.schemas import DecisionItem, to_dict
 
 
-PROFILE_LABELS = {"RiskFirst":"Ưu tiên rủi ro", "LowStock":"Tồn kho thấp",
-                  "DOS":"Độ bao phủ thấp", "RevenueAtRisk":"Doanh thu có rủi ro"}
-ACTION_LABELS = {"pending":"Chờ xem xét", "accepted":"Chấp nhận", "rejected":"Từ chối", "edited":"Điều chỉnh số lượng"}
-FLAG_LABELS = {"negative_stock":"Tồn âm", "stagnant_inventory":"Tồn chậm luân chuyển",
-    "chronic_stockout":"Hết hàng kéo dài", "demand_spike_informational":"Biến động bán hàng",
-    "sop_excluded_diagnostics":"Đã loại ngày kiểm kê"}
+PROFILE_LABELS = {"RiskFirst":"Risk first", "LowStock":"Low stock",
+                  "DOS":"Low cover", "RevenueAtRisk":"Revenue at risk"}
+ACTION_LABELS = {"pending":"Pending", "accepted":"Accept", "rejected":"Reject", "edited":"Adjust quantity"}
+FLAG_LABELS = {"negative_stock":"Negative stock", "stagnant_inventory":"No sales in 90 days",
+    "chronic_stockout":"Chronic stockout", "demand_spike_informational":"Sales spike",
+    "sop_excluded_diagnostics":"Stocktaking days excluded"}
 
 
 def scenario_label(index, config):
@@ -32,6 +32,28 @@ def item_rows(items, query=""):
     return [to_dict(item) for item in items if not query or query in item.sku_id.casefold()]
 
 
+def item_advice(item, include_coverage=True):
+    """Explain observed coverage and allocation without inventing model attribution."""
+    parts=[]
+    if include_coverage and item.dos is not None:
+        parts.append(f"About {item.dos:.1f} days of stock")
+    elif include_coverage:
+        parts.append("Stock cover unavailable")
+    flags=[FLAG_LABELS.get(f,f) for f in item.flags if f!="sop_excluded_diagnostics"]
+    parts.extend(flags)
+    if not item.eligible:
+        parts.append("Check eligibility before ordering")
+    elif item.suggested_q == 0:
+        parts.append("No replenishment needed for this target")
+    elif item.allocated_q == 0:
+        parts.append("Not allocated: quantity limit reached")
+    elif item.allocated_q < item.suggested_q:
+        parts.append(f"Needs {item.suggested_q}; limited to {item.allocated_q}")
+    else:
+        parts.append("Full suggested quantity")
+    return "; ".join(parts)
+
+
 def csv_export(items):
     stream=io.StringIO(newline="")
     writer=csv.DictWriter(stream,fieldnames=[f.name for f in fields(DecisionItem)])
@@ -47,8 +69,8 @@ def csv_export(items):
 
 
 def comparison_rows(comparison):
-    return [{"Phương án":scenario_label(i,r.config),"SKU xem xét":r.summary["selected_sku_count"],
-        "SKU đặt hàng":r.summary["order_sku_count"],"Đề xuất":r.summary["units_suggested"],
-        "Phân bổ":r.summary["units_allocated"],"Còn lại":r.summary["budget_remaining"],
-        "Ngưỡng rủi ro":r.config.pstar,"K":r.config.top_k,"Q":r.config.unit_budget_q,
-        "Số ngày bao phủ":r.config.coverage_tau_days} for i,r in enumerate(comparison.results)]
+    return [{"Scenario":scenario_label(i,r.config),"Review items":r.summary["selected_sku_count"],
+        "Order items":r.summary["order_sku_count"],"Suggested":r.summary["units_suggested"],
+        "Allocated":r.summary["units_allocated"],"Remaining":r.summary["budget_remaining"],
+        "Risk threshold":r.config.pstar,"K":r.config.top_k,"Q":r.config.unit_budget_q,
+        "Stock cover days":r.config.coverage_tau_days} for i,r in enumerate(comparison.results)]

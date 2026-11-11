@@ -21,6 +21,16 @@ def records():
     return inventory, sales
 
 
+def test_snapshot_date_discovery_is_sorted_and_read_only():
+    inventory,sales=records()
+    inventory.append(dict(inventory[0],analysis_date=T-timedelta(days=3)))
+    assert MockDataProvider(inventory,sales).snapshot_dates()==(T-timedelta(days=3),T)
+    with duckdb.connect(':memory:') as connection:
+        connection.execute('CREATE TABLE mms_inventory_daily (analysis_date DATE)')
+        connection.execute('INSERT INTO mms_inventory_daily VALUES (?), (?), (?)',[T,T-timedelta(days=3),T])
+        assert DuckDBDataProvider(connection).snapshot_dates()==(T-timedelta(days=3),T)
+
+
 def test_snapshot_lookback_boundaries_and_frozen_input():
     inventory, sales = records()
     sales += [dict(sku_id="A", sales_date=T-timedelta(days=90), quantity=999, revenue=0),
