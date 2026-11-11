@@ -1,57 +1,49 @@
-from ..core.schemas import DecisionItem, MMSValidationError, ScenarioResult, finite
-from ..diagnostics.flags import diagnostic_flags
+"""Build a review list and allocate a unit budget (MB4).
+
+Steps: keep products with risk >= pstar -> rank by profile -> keep top_k -> quantity per
+policy -> allocate the budget greedily in rank order (a line may get part of its quantity).
+"""
+from ..schemas import DecisionItem, MMSError, ScenarioResult
 from .policy import POLICY_VERSIONS, propose
 
 
-def execute(snapshot, config, risk_scores, metadata):
-    """Provisional MVP: pstar → profile sort → K → policy quantity → greedy partial allocation.
+def _rank_key(profile):
+    if profile == "RiskFirst":
+        return lambda row, risk: (-risk, row.sku_id)
+    if profile == "RevenueAtRisk":
+        # Expected daily sales value at risk: risk x 90-day revenue.
+        return lambda row, risk: (-risk * (row.revenue_90d or 0), row.sku_id)
+    return lambda row, risk: (row.days_of_supply if row.days_of_supply is not None else float("inf"), row.sku_id)
 
-    Q is an abstract sum of product-specific stock units, not currency or a
-    shared physical unit. It is an explicit scenario resource assumption.
-    """
+
+def build_plan(snapshot, config, risk_scores, metadata=None):
     if config.analysis_date != snapshot.analysis_date:
-        raise MMSValidationError("Scenario date differs from frozen snapshot")
+        raise MMSError("Scenario date differs from the snapshot date")
     if len(risk_scores) != len(snapshot.rows):
-        raise MMSValidationError("Risk scores must align with snapshot rows")
-    for score in risk_scores:
-        if not 0 <= finite(score, "risk_score") <= 1:
-            raise MMSValidationError("Risk scores must be in [0,1]")
+        raise MMSError("Risk scores must align with snapshot rows")
+    key = _rank_key(config.profile)
     candidates = [(r, s) for r, s in zip(snapshot.rows, risk_scores) if s >= config.pstar]
-    if config.profile == "RevenueAtRisk" and any(r.revenue_90d is None for r, _ in candidates):
-        raise MMSValidationError("RevenueAtRisk requires a verified revenue proxy for every candidate")
-
-    def key(pair):
-        row, risk = pair
-        if config.profile == "RiskFirst": value = -risk
-        elif config.profile == "LowStock": value = row.available_stock
-        elif config.profile == "DOS": value = row.dos if row.dos is not None else float("inf")
-        else: value = -risk * row.revenue_90d
-        return value, row.sku_id
-
-    ranked = sorted(candidates, key=key)[:config.top_k]
-    remaining = config.unit_budget_q
-    review = []
+    ranked = sorted(candidates, key=lambda pair: key(*pair))[:config.top_k]
+    remaining = config.unit_budget
+    items = []
     for rank, (row, risk) in enumerate(ranked, 1):
-        decision = propose(row, config)
-        q = decision.suggested_q
-        allocated = q if remaining is None else min(q, remaining)
+        proposal = propose(row, config)
+        allocated = proposal.suggested_qty if remaining is None else min(proposal.suggested_qty, remaining)
         if remaining is not None:
             remaining -= allocated
-        review.append(DecisionItem(row.sku_id, rank, risk, row.available_stock, row.stock_unit,
-            row.dos, row.vel90, q, allocated, row.eligible, diagnostic_flags(row),
-            f"{config.profile} rank {rank}; risk score {risk:.4f} >= {config.pstar}; "
-            f"{decision.explanation}, allocated {allocated}. "
-            "Manager review required; risk alone is not a purchase instruction.",
-            decision.target_level, decision.safety_stock, decision.service_level))
-    orders = tuple(item for item in review if item.eligible and item.suggested_q > 0 and item.allocated_q > 0)
-    return ScenarioResult(config, tuple(review), orders, {
-        "selected_sku_count": len(review), "candidate_count": len(candidates),
-        "order_sku_count": len(orders), "units_suggested": sum(r.suggested_q for r in review),
-        "units_allocated": sum(r.allocated_q for r in orders), "budget_remaining": remaining,
-        "q_zero_count": sum(r.suggested_q == 0 for r in review),
-        "mean_selected_risk_score": sum(r.risk_score for r in review) / len(review) if review else None,
-        "resource_utilization": (sum(r.allocated_q for r in orders) / config.unit_budget_q
-                                 if config.unit_budget_q else None),
-    }, dict(metadata, policy_version="scenario-mvp-v1",
-            replenishment_policy=config.policy, replenishment_version=POLICY_VERSIONS[config.policy], allocation="greedy_partial",
-            parameter_order="pstar,profile,K,tau,Q", provisional_tn_rules=True))
+        items.append(DecisionItem(
+            rank, row.sku_id, row.product_name, row.stock_unit, risk, row.available_stock, row.dispensary_stock,
+            row.daily_demand, row.days_of_supply, proposal.suggested_qty, allocated, row.unit_value,
+            proposal.target_level, proposal.safety_stock, proposal.service_level, row.abc_class, row.flags))
+    allocated_value = sum(i.allocated_qty * (i.unit_value or 0) for i in items)
+    summary = {
+        "candidates": len(candidates),
+        "review_items": len(items),
+        "order_lines": sum(i.allocated_qty > 0 for i in items),
+        "units_suggested": sum(i.suggested_qty for i in items),
+        "units_allocated": sum(i.allocated_qty for i in items),
+        "budget_remaining": remaining,
+        "allocated_value": allocated_value,
+    }
+    return ScenarioResult(config, tuple(items), summary,
+                          dict(metadata or {}, policy_version=POLICY_VERSIONS[config.policy]))

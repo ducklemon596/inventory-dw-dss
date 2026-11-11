@@ -1,7 +1,17 @@
+# Pharmacy green as the single brand colour; red/orange/blue only carry meaning (risk, flags).
 [theme]
 base = "light"
-primaryColor = "#087f82"
-backgroundColor = "#f4f7f8"
-secondaryBackgroundColor = "#ffffff"
-textColor = "#163239"
-font = "sans serif"
+primaryColor = "#15803D"
+textColor = "#1F2937"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F6F4"
+borderColor = "#D9E5DD"
+dataframeHeaderBackgroundColor = "#F0FDF4"
+
+[theme.sidebar]
+backgroundColor = "#F0FDF4"
+secondaryBackgroundColor = "#FFFFFF"
+borderColor = "#CFE3D6"
+
+[browser]
+gatherUsageStats = false

@@ -1,71 +1,75 @@
-# Pharmaceutical Inventory DW
+# Pharmacy inventory DW and DSS
 
-Operational flow: **PostgreSQL OLTP → ClickHouse raw → dbt marts → DSS**. CSV loading is an optional way to initialize/update PostgreSQL from the supported pharmacy export. The DW extracts from the transactional database.
+A data warehouse for one pharmacy's sales and stock ledger. On top of it sits a decision-support layer (MMS) that flags products about to run out and proposes how much to order.
 
-Read [architecture](docs/architecture.md), [source/data model](docs/data-model.md), [business semantics](docs/data-semantics.md) and [DSS handover](docs/dss-handover.md) for system meaning. Commands and implementation guidance live beside the owning code.
-
-## Choose a destination
-
-| Destination/task | Guide | Modes |
-|---|---|---|
-| Load PostgreSQL from the source export | [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md) | Full or inclusive date range; preparation is automatic |
-| Load ClickHouse raw from PostgreSQL | [Raw loader](src/inventory_dw_dss/README.md) | Incremental by default, explicit full or inclusive date range |
-| Build marts and run tests | [dbt transformations](transform/dbt/README.md) | All models, selected layer/model, or tests only |
-| Run MMS scenarios, evaluation and decision tracking | [MMS backend and Streamlit](src/inventory_dw_dss/mms/README.md) | Synthetic demo or verified normalized export + approved artifact |
-
-## Source CSV files (optional PostgreSQL initialization)
-
-The original CSV exports are excluded from Git because each exceeds GitHub's 100 MB file limit. Download the [source ZIP archive (Mendeley Data, version 2)](https://data.mendeley.com/public-api/zip/w6zjtdjk9m/download/2). Extract only the two sales and stock data files; the other archive contents are not needed. Place the two files in the repository with these exact names:
-
-```text
-data/raw/
-├── sales_raw.csv
-└── stock_raw.csv
+```
+CSV export ─(optional)─► PostgreSQL OLTP ─► ClickHouse raw ─► dbt: staging → intermediate → marts ─► MMS (CLI + Streamlit)
 ```
 
-Rename the downloaded files if necessary; preserve their contents, headers and `RowNumber` values. Both files are required for the [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md). Once PostgreSQL is populated, routine extraction and dbt transformations do not require these CSVs. Governed UOM reference files remain included in Git.
+| Part | Guide |
+|---|---|
+| Load the source CSVs into PostgreSQL | [PostgreSQL loader](src/inventory_dw_dss/oltp_ingestion/README.md) |
+| Copy PostgreSQL into ClickHouse raw | [Raw loader](src/inventory_dw_dss/README.md) |
+| Build and test the marts | [dbt project](transform/dbt/README.md) |
+| Risk model, order policies, metrics, app | [MMS](src/inventory_dw_dss/mms/README.md) |
+| What the tables mean | [Data model](docs/data-model.md), [semantics](docs/data-semantics.md), [DSS handover](docs/dss-handover.md) |
+| Model results on the pharmacy data | [Evaluation report](docs/mms-real-data-evaluation.md) |
 
-The [MMS integration guide](docs/mms-production.md) records the verified v2
-download hashes and row counts, source-audit command, new model training and
-the trained simulation app. Raw source files are not automatically valid
-pharmacy-level available-stock snapshots.
+## Quick start
 
-## Start local services
-
-Requires Python 3.12+, `uv`, Docker and Compose. From the repository root:
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker and Compose.
 
 ```bash
 uv sync --locked
 docker compose -p inventory-dw-dss -f infra/docker-compose.yml up -d --wait
 ```
 
-[Services](infra/README.md) documents connection settings and persistent volumes. When PostgreSQL already contains the source tables, the routine pipeline is:
+With PostgreSQL already loaded, refresh the warehouse:
 
 ```bash
 uv run --locked inventory-dw-dss load raw
 uv run --locked inventory-dw-dss transform
 ```
 
-Run these sequentially. Transform uses the governed UOM version pinned in the project configuration; the local guide explains selection and overrides. Read marts only after successful completion. Use `uv run --locked inventory-dw-dss --help` to inspect the public interface.
-
-## ClickHouse Web UI
-
-Start [CH-UI](https://ch-ui.com/docs/installation/) after starting the local services:
+Then train a risk model and open the planning app. The [MMS README](src/inventory_dw_dss/mms/README.md) has the full set of commands.
 
 ```bash
-docker compose -p inventory-dw-dss -f infra/docker-compose.yml up -d --no-deps ch-ui
+uv run --locked --extra mms inventory-mms train --dates 2023-04-03..2025-05-12 \
+  --output artifacts/shortfall-h14-v1 --version shortfall-h14-v1
+MMS_ARTIFACT_PATH=artifacts/shortfall-h14-v1/histgb.joblib MMS_MANIFEST_PATH=artifacts/shortfall-h14-v1/manifest.json \
+  uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/app.py
 ```
 
-Open http://localhost:3488. The connection uses `http://clickhouse:8123` on the existing Docker network. Sign in with the existing ClickHouse `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` configured in Compose (the default username is `dbt`); enter the password only in the sign-in form. No additional credentials are configured for CH-UI.
+## Source data
 
-Stop only the web UI:
+The original exports come from the [Mendeley Data archive (version 2)](https://data.mendeley.com/public-api/zip/w6zjtdjk9m/download/2). Each file exceeds GitHub's size limit, so they are not in Git. Extract the sales and stock files to `data/raw/sales_raw.csv` and `data/raw/stock_raw.csv`, keeping their contents and `RowNumber` values. They are only needed to initialize PostgreSQL.
+
+## Key terms
+
+| Term | Meaning |
+|---|---|
+| Dispensary / storeroom | The shelf customers buy from (Apotek) / back stock (Gudang Obat 1) |
+| Available stock | Dispensary + storeroom at day end. Order quantities are based on it |
+| MA90 | Units sold in the last 90 days ÷ 90, the demand forecast |
+| Pharmacy shortfall | Sales over the next h days reach the available stock, so the pharmacy runs out without a purchase |
+| Service level | Probability that stock covers demand until the next delivery |
+| UOM | Unit of measure. Sales lines are converted to the product's stock unit by a governed mapping |
+
+Metric definitions (Precision@K, lift, ROC-AUC, WAPE, fill rate) are in the [MMS README](src/inventory_dw_dss/mms/README.md#metrics).
+
+## Services
+
+[infra](infra/README.md) documents connection settings and volumes. An optional ClickHouse web UI is available:
 
 ```bash
-docker compose -p inventory-dw-dss -f infra/docker-compose.yml stop ch-ui
+docker compose -p inventory-dw-dss -f infra/docker-compose.yml up -d --no-deps ch-ui   # http://localhost:3488
 ```
 
-UI preferences and sessions stay in the container; recreating it resets them. Database data remains in the existing database volumes.
+## Tests
 
-## Consumer boundary
+[tests/README.md](tests/README.md) lists every suite. The quick checks are:
 
-The warehouse includes four conformed dimensions and three source-preserving facts, with preserved sales lines, recorded inventory movements and observed daily balances. Sales have no verified warehouse assignment or completion/cancellation status. Unsupported conversion stays missing; in these facts missing days are not zero stock or demand. Two replenishment facts give DSS models a dense daily stock position, point-in-time features and forward stockout labels under documented ledger rules; see [replenishment marts](transform/dbt/models/marts/replenishment/README.md). The [MMS backend](src/inventory_dw_dss/mms/README.md) reads them for forecasting, risk inference and decision scenarios. See [semantics](docs/data-semantics.md) before building consumer calculations.
+```bash
+uv run --locked inventory-dw-dss transform                    # dbt models + data tests
+uv run --locked --extra ui --group dev pytest tests/mms       # MMS, no database needed
+```

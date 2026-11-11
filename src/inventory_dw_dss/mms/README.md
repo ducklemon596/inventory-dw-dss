@@ -1,132 +1,121 @@
-# Model Management Subsystem
+# MMS: replenishment decision support
 
-The [Inventory Studio UI guide](../../../docs/mms-ui.md) includes the dashboard
-preview, launch command and manager workflow.
+MMS reads the [replenishment marts](../../../transform/dbt/models/marts/replenishment/README.md) in ClickHouse. For an analysis date it lists the products most likely to run out, proposes order quantities and records the manager's decisions.
 
-MMS implements MA90, HistGB inference, coverage suggestions, scenario allocation,
-historical metrics and SQLite decision tracking behind `MMSService`. Production
-requires a verified normalized export and the original trusted trained bundle;
-the included demo is wholly synthetic. No scenario action triggers ETL or dbt.
-
-New: [production integration and training guide](../../../docs/mms-production.md)
-documents the downloaded real source data, SELECT-only ClickHouse adapter,
-new HistGB training pipeline, NEW1–NEW7 simulation experiments, reference checks
-and an embeddable team UI. Create a fully trained local demonstration with:
-
-```powershell
-uv run --locked --extra ui inventory-mms bootstrap-demo --output reports/mms-trained-demo --seed 7
-uv run --locked --extra ui streamlit run reports/mms-trained-demo/app.py
+```
+snapshot (mart) ─► risk score (MB2) ─► review list (pstar, ranking, top K) ─► order quantity (MB3) ─► unit budget (MB4) ─► manager decision
 ```
 
-This trains a new model on labelled simulation data; it does not claim to use
-the downloaded pharmacy CSVs as verified available-stock snapshots. Real source
-audit and production approval remain distinct.
+## Models
 
-From the repository root (Python 3.12):
+| ID | What it answers | How |
+|---|---|---|
+| MB1 | Expected daily demand | MA90: units sold in the last 90 days ÷ 90 |
+| MB2 | Which products will run out | HistGradientBoosting on 35 mart features ([risk.py](models/risk.py)) |
+| MB3 | How much to order | Coverage rule or service-level policy ([policy.py](models/policy.py)) |
+| MB4 | Which lines get the budget | Rank by profile, allocate units greedily in rank order ([scenario.py](models/scenario.py)) |
 
-```powershell
-uv sync --locked --extra ui --group dev
-uv run --locked --extra mms python -m inventory_dw_dss.mms.demo
-uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/ui.py
-uv run --locked --extra ui --group dev pytest tests/mms -q
-```
+**Risk target.** Each model bundle predicts one event within its horizon h (7, 14 or 30 days). The bundle's manifest records which one.
 
-If uv is not on PATH on Windows, use `py -3.12 -m uv` in its place.
+- `pharmacy_shortfall` is the default. It means sales over the next h days reach all stock at T (dispensary + storeroom), so the pharmacy runs out unless it buys. Use it for order planning.
+- `dispensary_stockout` means the shelf balance reaches zero. This label also reflects how quickly staff refilled the shelf, so it partly measures past actions rather than risk.
 
-```python
-from inventory_dw_dss.mms.core.schemas import ScenarioConfig, to_dict
-from inventory_dw_dss.mms.demo import build_demo_service
+**Order policies.**
 
-service = build_demo_service()  # visibly synthetic; never use as a production fallback
-config = ScenarioConfig("2025-06-30", profile="RiskFirst", pstar=0.3,
-                        top_k=50, unit_budget_q=15, coverage_tau_days=14)
-result = service.execute_scenario(config)
-assert [r.sku_id for r in result.review_list] == ["A", "B", "C"]
-assert [(r.sku_id, r.allocated_q) for r in result.order_proposal] == [("B", 14), ("C", 1)]
-```
+- `coverage` orders `ceil(coverage_days × MA90 − available stock)`. It targets average demand, so it is short whenever demand runs above average (about 40% of 16-day windows on 2025 data). It ignores lead time.
+- `service_level` orders up to S, the `service_level` quantile of demand over the review period plus the lead time. Demand follows a negative binomial fitted to the 90-day mean and standard deviation. S minus mean demand is the safety stock, so erratic products carry more buffer. With `abc_service`, levels are A 98%, B 95% and C 90%.
 
-## Pharmacy data (replenishment marts)
+**Ranking profiles.**
 
-`MMS_DATA_SOURCE=mart` reads `fct_product_replenishment_snapshot` and `fct_product_daily_position`
-built by dbt; no export step is needed. Snapshots contain products sold in the last 90 days.
-`available_stock` is pharmacy-wide (dispensary + storeroom) and drives order quantities;
-`point_of_sale_stock` is the dispensary balance that defines stockout incidents for training
-and backtests. Train with `--feature-set mart` and evaluate with `inventory-mms backtest`.
-Results and the iteration log are in [real-data evaluation](../../../docs/mms-real-data-evaluation.md).
+- `RiskFirst` ranks by highest risk score.
+- `RevenueAtRisk` ranks by risk × 90-day revenue.
+- `DaysOfSupply` ranks by fewest days of stock.
+
+## Business terms
+
+| Term | Meaning |
+|---|---|
+| Dispensary / storeroom | The shelf customers buy from / back stock, refilled into the dispensary by transfer |
+| Available stock | Dispensary + storeroom at the end of the day, floored at 0 |
+| Days of supply | Available stock ÷ MA90 demand |
+| Orderable | Sold in the last 90 days, not consignment, stocked at the dispensary |
+| Review period | Days between order reviews (weekly = 7) |
+| Lead time | Days from ordering to receipt |
+| Service level | Probability that stock covers demand until the next delivery |
+| Safety stock | Stock above mean demand that absorbs variability |
+| ABC class | A = products making up the first 80% of 90-day sales value, B = next 15%, C = rest |
+| pstar | Minimum risk score for the review list |
+| Unit budget | Total units the plan may allocate. Units of different products are summed as counts, not money |
+| Stocktake | A stock count that corrects the balance. Windows containing one are left out of training and evaluation |
+
+## Metrics
+
+| Metric | Meaning |
+|---|---|
+| Precision@K | Share of the top K products by risk that had the event. "Of 50 alerts, how many were right" |
+| Recall@K | Share of all events caught in the top K |
+| Lift | Precision@K ÷ event rate. How much better than picking at random |
+| ROC-AUC | Chance a random event product scores above a random non-event product (0.5 = random) |
+| WAPE | Σ\|forecast − actual\| ÷ Σ actual demand over the horizon (MA90 forecast) |
+| Bias | Σ(forecast − actual) ÷ Σ actual. Positive means over-forecast |
+| Review coverage | Share of events that the plan's review list contains, after pstar and ranking |
+| Fill rate | Units sold ÷ units demanded in a policy replay (lost sales lower it) |
+| Value fill rate | Fill rate weighted by unit sales value |
+| Stockout day share | Product-days with no stock ÷ product-days with demand |
+
+Scores are not calibrated probabilities. Use them to rank and use pstar as a cut-off. Results on the 2023–2025 pharmacy data are in the [evaluation report](../../../docs/mms-real-data-evaluation.md).
+
+## Run
+
+Requires the marts (`uv run --locked inventory-dw-dss transform`).
 
 ```bash
-export MMS_DATA_SOURCE=mart MMS_ARTIFACT_PATH=artifacts/pharmacy-mart-h14-v1/histgb.joblib \
-  MMS_MANIFEST_PATH=artifacts/pharmacy-mart-h14-v1/manifest.json
-uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/ui.py
+# Train on weekly decision dates; labels must end before the dates you evaluate.
+uv run --locked --extra mms inventory-mms train --dates 2023-04-03..2025-05-12 \
+  --output artifacts/shortfall-h14-v1 --version shortfall-h14-v1 --horizon 14 --target pharmacy_shortfall
+
+export MMS_ARTIFACT_PATH=artifacts/shortfall-h14-v1/histgb.joblib
+export MMS_MANIFEST_PATH=artifacts/shortfall-h14-v1/manifest.json
+
+uv run --locked --extra mms inventory-mms backtest --dates 2025-06-02..2025-12-15 --horizon 14
+uv run --locked --extra mms inventory-mms simulate-policy --start 2025-06-02 --end 2025-12-28
+uv run --locked --extra mms inventory-mms plan --date 2025-12-01 --service-level 0.95
+uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/app.py
 ```
 
-### Risk target
+All commands print JSON. `--dates` takes a comma list or a weekly range `START..END` (Mondays).
 
-`train-histgb --target` chooses what MB2 predicts:
+| Variable | Default | Purpose |
+|---|---|---|
+| `MMS_ARTIFACT_PATH`, `MMS_MANIFEST_PATH` | required | Trained model bundle. Only load bundles you trained, because joblib runs code on load |
+| `MMS_DECISIONS_PATH` | `reports/mms-decisions.sqlite` | Saved decisions (app) |
+| `CLICKHOUSE_HOST`, `_HTTP_PORT`, `_DB`, `_USER`, `_PASSWORD`, `_SECURE` | `localhost`, `8123`, `inventory_dw`, `dbt`, `dbt_local`, `false` | Warehouse connection |
 
-- `dispensary_stockout` is the default and matches artifacts trained before this option existed.
-- `pharmacy_shortfall` predicts that sales reach all stock at T, and is recommended for order planning.
+A bundle refuses to score in two cases:
+- The mart was rebuilt from another export.
+- The analysis date falls before its `supervised_data_cutoff`, because the model already saw those outcomes.
 
-The manifest records `risk_target`. Backtests and the UI caption follow it. See [risk target](../../../docs/mms-real-data-evaluation.md#risk-target-shelf-stockout-vs-pharmacy-shortfall).
+## App
 
-### Replenishment policy
+The app has three tabs:
 
-MB3 has two policies:
+- **Đề xuất** shows the plan as one table. The manager sets Duyệt/Bỏ qua per line, edits the approved quantity, adds a note and saves.
+- **So sánh** shows plans A and B on the same snapshot and scores: totals and per-product allocation differences.
+- **Lịch sử** shows saved sessions with their decisions.
 
-- `coverage` is the default and orders `ceil(tau × MA90 − stock)`.
-- `service_level` orders up to the negative-binomial demand quantile over `coverage_tau_days` (review period) plus `lead_time_days`. It is fitted from the 90-day daily mean and `sales_std_90d`; without a std it uses Poisson.
+Changing a setting marks the plan as stale until it is rerun. Saving records a decision, not a purchase order.
 
-`abc_service=True` applies A 98% / B 95% / C 90% from the mart's `abc_class`. Items carry `target_level`, `safety_stock` and `service_level`.
+## Code map
 
-`inventory-mms simulate-policy` replays policies over mart history. See [real-data evaluation](../../../docs/mms-real-data-evaluation.md#replenishment-policy-mb3).
+| File | Role |
+|---|---|
+| [schemas.py](schemas.py) | Row, snapshot, configuration and plan contracts |
+| [data.py](data.py) | ClickHouse mart reader and outcome windows |
+| [models/](models) | Risk model, targets, order policies, plan building |
+| [training.py](training.py) | Training rows and bundle writing |
+| [evaluation/](evaluation) | Backtest metrics and policy replay |
+| [service.py](service.py) | Snapshot → scores → plans, shared by CLI and app |
+| [decisions.py](decisions.py) | SQLite decision store |
+| [cli.py](cli.py), [app.py](app.py) | Command line and Streamlit app |
 
-```python
-config = ScenarioConfig("2025-12-01", policy="service_level", service_level=0.95,
-                        coverage_tau_days=7, lead_time_days=2)
-```
-
-Production UI configuration (normalized DuckDB export):
-
-```powershell
-$env:MMS_DUCKDB_PATH = 'C:/exports/verified-mms.duckdb'
-$env:MMS_ARTIFACT_PATH = 'C:/approved/histgb.joblib'
-$env:MMS_MANIFEST_PATH = 'C:/approved/manifest.json'
-$env:MMS_DECISIONS_PATH = 'C:/local/mms-decisions.sqlite'
-uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/ui.py
-```
-
-Without `MMS_DUCKDB_PATH`, the standalone UI explicitly runs in synthetic demo
-mode. With a production database configured, errors are surfaced; no demo model
-is substituted. Connections are opened read-only per snapshot. Artifact loading
-is cached; use immutable versioned paths or restart after deploying a new bundle.
-
-## Service and persistence
-
-- `list_models()` returns four versioned metadata records and parameter names.
-- `run_model(model_id, snapshot, parameters)` returns `ModelResult(ok, items,
-  metadata, error)`. Unsupported parameters and missing artifacts have structured
-  errors. Service calls raise `MMSValidationError`/`ArtifactError` for UI handling.
-- `execute_scenario(config)` returns separate Review/Order lists and summary.
-- `compare_scenarios(configs)` accepts 2–4 same-date configs, reads one snapshot
-  and scores once, then returns overlap, rank/quantity changes and separate plans.
-- `Backtester(service, outcome_provider).run(config, dates, horizon_days)` supports
-  7/14/30-day windows, per-date results and explicit macro averages of defined
-  metrics. Precision@K uses `min(K, cohort size)`, recalls/lift use incident-risk
-  cohort positives, and ROC-AUC requires both classes. Existing zero-stock SKUs
-  are reported separately. WAPE/Bias use total observed sales as denominator;
-  Bias is (predicted-actual)/actual. Zero denominators yield JSON null.
-- `DecisionRepository(path).save_decision(result, actions)` / `get_session(id)` /
-  `list_sessions()` preserve exact JSON results and manager-entered actions.
-  Edited quantities describe a manager override, not a new Q-constrained proposal.
-  Follow-up observations do not prove that a manager's decision caused a receipt.
-- `add_followups(id, outcome_provider)` requires the entire 30-day window; receipt
-  within 7 days and stockout within 30 days are separately sourced observations.
-
-`to_dict()` converts service dataclasses to JSON-compatible values. Timestamps
-of saved sessions are UTC; analysis dates are calendar dates in the data contract.
-
-Read [data contract](../../../docs/mms-data-contract.md),
-[artifact audit and provisional rules](../../../docs/mms-artifact-audit.md), and
-[execution status](../../../docs/mms-progress.md) before production integration.
-Historical metrics are observational; neither demo nor retrospective results
-establish causal reductions in stockouts, costs or lost sales.
+Tests: `uv run --locked --extra ui --group dev pytest tests/mms` uses in-memory [fixtures](../../../tests/mms/fixtures.py) and needs no database.

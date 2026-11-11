@@ -1,1 +1,1 @@
-"""Historical evaluations with separate future observation windows."""
+"""Backtests of the risk model and replays of order policies."""

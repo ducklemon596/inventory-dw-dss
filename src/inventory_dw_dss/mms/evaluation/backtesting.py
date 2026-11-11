@@ -1,147 +1,88 @@
+"""Score past decision dates and compare with what happened next.
+
+Risk metrics use the top_k products by risk score among those holding the target stock;
+products whose window contains a stocktake are left out, as in training.
+
+    precision_at_k  share of the top_k that had the event (how many alerts were right)
+    recall_at_k     share of all events caught by the top_k
+    lift            precision_at_k / event rate (how much better than picking at random)
+    roc_auc         probability a random event product scores above a random non-event one
+    wape            sum |forecast - actual| / sum actual for MA90 demand over the horizon
+    bias            sum (forecast - actual) / sum actual; positive means over-forecast
+"""
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
 
-from ..core.schemas import MMSValidationError, as_date, finite, to_dict
-from ..models.scenario import execute
-from ..models.targets import model_target, target_label, target_stock
-from .metrics import demand_metrics, risk_metrics
+from ..models.scenario import build_plan
+from ..models.targets import target_label, target_stock
+from ..schemas import MMSError, as_date
 
 
-@dataclass(frozen=True)
-class Observation:
-    observation_date: date
-    sku_id: str
-    sales_quantity: float
-    stockout: bool
-    received_quantity: float = 0
-    sop_day: bool = False
-
-    def __post_init__(self):
-        object.__setattr__(self, "observation_date", as_date(self.observation_date))
-        finite(self.sales_quantity, "observed sales", 0)
-        finite(self.received_quantity, "observed receipts", 0)
-        if not self.sku_id or type(self.stockout) is not bool or type(self.sop_day) is not bool:
-            raise MMSValidationError("Observed labels must be explicit boolean pharmacy-total observations")
+def risk_metrics(labels, scores, k):
+    from sklearn.metrics import roc_auc_score
+    order = sorted(range(len(labels)), key=lambda i: -scores[i])[:k]
+    events = sum(labels)
+    hits = sum(labels[i] for i in order)
+    precision = hits / len(order) if order else None
+    rate = events / len(labels) if labels else None
+    return {"precision_at_k": precision, "recall_at_k": hits / events if events else None,
+            "lift": precision / rate if precision is not None and rate else None,
+            "roc_auc": float(roc_auc_score(labels, scores)) if len(set(labels)) == 2 else None,
+            "cohort": len(labels), "events": events}
 
 
-class OutcomeProvider:
-    def __init__(self, observations, data_cutoff, version):
-        self.observations = tuple(observations)
-        self.data_cutoff = as_date(data_cutoff)
-        self.version = version
-        keys = [(o.sku_id, o.observation_date) for o in self.observations]
-        if len(set(keys)) != len(keys) or not version:
-            raise MMSValidationError("Duplicate outcomes or missing outcome version")
-        self._index = {(o.sku_id, o.observation_date): o for o in self.observations}
-
-    def window(self, t, sku_ids, horizon):
-        t = as_date(t)
-        if self.data_cutoff < t + timedelta(days=horizon):
-            raise MMSValidationError("Observation window is not complete at the data cutoff")
-        result = {}
-        for sku in sku_ids:
-            days = []
-            for offset in range(1, horizon+1):
-                o = self._index.get((sku, t+timedelta(days=offset)))
-                if o is None:
-                    raise MMSValidationError(f"Observation window is not complete for {sku}")
-                days.append(o)
-            result[sku] = tuple(days)
-        return result
-
-    @classmethod
-    def from_duckdb(cls, connection):
-        """Optional outcome export with one explicit metadata row and daily labels."""
-        import duckdb
-        try:
-            metadata = connection.execute("SELECT data_cutoff, outcome_version FROM mms_outcome_metadata").fetchall()
-            if len(metadata) != 1:
-                raise MMSValidationError("Expected one outcome metadata row")
-            cursor = connection.execute("SELECT observation_date, sku_id, sales_quantity, stockout, received_quantity, sop_day FROM mms_outcomes_daily")
-            return cls([Observation(*row) for row in cursor.fetchall()], *metadata[0])
-        except duckdb.Error as exc:
-            raise MMSValidationError(f"Cannot read optional outcome export: {exc}") from exc
+def demand_metrics(actual, forecast):
+    total = sum(actual)
+    if not total:
+        return {"wape": None, "bias": None}
+    return {"wape": sum(abs(f - a) for a, f in zip(actual, forecast)) / total,
+            "bias": sum(f - a for a, f in zip(actual, forecast)) / total}
 
 
 @dataclass(frozen=True)
 class BacktestReport:
-    config: dict
     horizon_days: int
+    target: str
     per_date: tuple[dict, ...]
     aggregate: dict
 
 
 class Backtester:
-    def __init__(self, service, outcome_provider):
+    def __init__(self, service, outcomes):
         self.service = service
-        self.outcomes = outcome_provider
+        self.outcomes = outcomes
 
-    def run(self, config, decision_dates, horizon_days=30, sop_scope="date"):
-        """sop_scope="date" drops a date when any window touches a stocktake (synthetic exports);
-        "sku" drops only the affected SKUs, for sources with routine per-product cycle counts."""
-        if horizon_days not in (7, 14, 30) or type(horizon_days) is not int:
-            raise MMSValidationError("Evaluation horizon must be 7, 14 or 30 days")
-        if sop_scope not in ("date", "sku"):
-            raise MMSValidationError("sop_scope must be date or sku")
-        config = self.service._config(config)
-        # Labels follow the artifact's declared target so scores and outcomes measure the same event.
-        target = model_target(self.service.executor.risk_model)
-        dates = sorted({as_date(t) for t in decision_dates})
-        if not dates:
-            raise MMSValidationError("At least one decision date is required")
+    def run(self, config, decision_dates, horizon_days):
+        target = self.service.risk_model.target
         per_date = []
-        for t in dates:
-            row = {"analysis_date": str(t)}
-            if sop_scope == "date" and t == date(2025, 7, 31) and horizon_days == 30:
-                per_date.append(dict(row, status="excluded_sop202508"))
-                continue
-            snapshot = self.service.provider.get_snapshot(t)
-            if snapshot.analysis_date != t:
-                raise MMSValidationError("Provider returned a different analysis date")
+        for t in sorted({as_date(d) for d in decision_dates}):
+            snapshot = self.service.reader.snapshot(t)
             try:
                 future = self.outcomes.window(t, [r.sku_id for r in snapshot.rows], horizon_days)
-            except MMSValidationError as exc:
-                per_date.append(dict(row, status="incomplete", reason=str(exc)))
+            except MMSError as exc:
+                per_date.append({"date": str(t), "status": "incomplete", "reason": str(exc)})
                 continue
-            sop_skus = {sku for sku, days in future.items() if any(o.sop_day for o in days)}
-            if sop_scope == "date" and sop_skus:
-                per_date.append(dict(row, status="excluded_sop"))
-                continue
-            scores = self.service.executor.risk_scores(snapshot)
-            metadata = self.service._metadata(snapshot) | {"outcome_version": self.outcomes.version,
-                "outcome_data_cutoff": str(self.outcomes.data_cutoff),
-                "outcome_start": str(t+timedelta(days=1)), "outcome_end": str(t+timedelta(days=horizon_days))}
-            metadata["risk_target"] = target
-            result = execute(snapshot, replace(config, analysis_date=t), scores, metadata)
-            # Incident-stockout ranking metrics exclude existing zero/negative point-of-sale balances
-            # and, under per-SKU scope, windows corrected by a stocktake.
-            cohort = [(r, score) for r, score in zip(snapshot.rows, scores)
-                      if target_stock(r, target) > 0 and r.sku_id not in sop_skus]
+            scores = self.service.scores(snapshot)
+            cohort = [(r, s) for r, s in zip(snapshot.rows, scores)
+                      if target_stock(r, target) > 0 and not any(o.stocktake for o in future[r.sku_id])]
             labels = [target_label(r, future[r.sku_id], target) for r, _ in cohort]
-            risk = risk_metrics(labels, [s for _, s in cohort], [r.sku_id for r, _ in cohort], config.top_k)
+            plan = build_plan(snapshot, replace(config, analysis_date=t), scores)
+            events = {r.sku_id for (r, _), y in zip(cohort, labels) if y}
+            reviewed = {i.sku_id for i in plan.items}
             actual = [sum(o.sales_quantity for o in future[r.sku_id]) for r in snapshot.rows]
-            predicted = [r.vel90*horizon_days for r in snapshot.rows]
-            review_skus = {item.sku_id for item in result.review_list}
-            new_stockout_skus = {r.sku_id for (r, _), label in zip(cohort, labels) if label}
-            quantities = [item.suggested_q for item in result.review_list]
-            allocation = dict(result.summary, quantity_distribution={
-                "min": min(quantities) if quantities else None, "max": max(quantities) if quantities else None,
-                "mean": sum(quantities)/len(quantities) if quantities else None},
-                q_zero_frequency=result.summary["q_zero_count"]/len(quantities) if quantities else None,
-                stockout_coverage=len(review_skus & new_stockout_skus)/len(new_stockout_skus) if new_stockout_skus else None)
-            per_date.append(dict(row, status="evaluated", metadata=metadata,
-                demand=demand_metrics(actual, predicted), risk=risk, allocation=allocation,
-                existing_stockout_count=sum(target_stock(r, target) == 0 for r in snapshot.rows),
-                sop_excluded_sku_count=len(sop_skus) if sop_scope == "sku" else 0,
-                negative_balance_count=sum(r.available_stock < 0 for r in snapshot.rows),
-                new_stockout_count=sum(labels)))
+            per_date.append({
+                "date": str(t), "status": "evaluated",
+                "risk": risk_metrics(labels, [s for _, s in cohort], config.top_k),
+                "demand": demand_metrics(actual, [r.daily_demand * horizon_days for r in snapshot.rows]),
+                # Share of events that the plan's review list (after pstar and profile) contains.
+                "review_coverage": len(reviewed & events) / len(events) if events else None,
+            })
         evaluated = [r for r in per_date if r["status"] == "evaluated"]
-        aggregate = {"evaluated_dates": len(evaluated), "excluded_or_incomplete_dates": len(per_date)-len(evaluated),
-                     "aggregation": "macro average across evaluated dates, excluding undefined metrics"}
-        for group in ("demand", "risk"):
-            keys = ("wape", "bias") if group == "demand" else ("precision_at_k", "recall_at_k", "lift", "roc_auc")
-            aggregate[group] = {}
+        aggregate = {"evaluated_dates": len(evaluated)}
+        for group, keys in (("risk", ("precision_at_k", "recall_at_k", "lift", "roc_auc")),
+                            ("demand", ("wape", "bias"))):
             for key in keys:
                 values = [r[group][key] for r in evaluated if r[group][key] is not None]
-                aggregate[group][key] = sum(values)/len(values) if values else None
-        return BacktestReport(to_dict(config), horizon_days, tuple(per_date), aggregate)
+                aggregate[key] = sum(values) / len(values) if values else None
+        coverage = [r["review_coverage"] for r in evaluated if r["review_coverage"] is not None]
+        aggregate["review_coverage"] = sum(coverage) / len(coverage) if coverage else None
+        return BacktestReport(horizon_days, target, tuple(per_date), aggregate)

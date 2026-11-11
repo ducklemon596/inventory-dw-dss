@@ -1,1 +1,1 @@
-"""Model management services; importing this package does not connect to a warehouse."""
+"""Replenishment decision support on the dbt marts; importing it does not connect to ClickHouse."""
