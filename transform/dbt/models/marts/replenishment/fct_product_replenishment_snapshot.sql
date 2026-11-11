@@ -26,6 +26,18 @@ windowed AS (
         sum(transfer_to_dispensary_qty) OVER last_30_days AS transfer_to_dispensary_qty_30d,
         countIf(is_dispensary_stockout = 1) OVER last_90_days AS dispensary_stockout_days_90d,
         max(has_stocktake) OVER last_90_days AS has_stocktake_90d,
+        stddevPop(toFloat64(sold_qty)) OVER last_90_days AS sold_qty_std_90d,
+        max(sold_qty) OVER last_90_days AS sold_qty_max_90d,
+        sum(sold_qty) OVER last_365_days AS sold_qty_365d,
+        countIf(sold_qty > 0) OVER last_365_days AS sale_days_365d,
+        countIf(has_purchase_receipt = 1) OVER last_365_days AS purchase_receipt_days_365d,
+        sum(purchase_received_qty) OVER last_365_days AS purchase_received_qty_365d,
+        countIf(transfer_to_dispensary_qty > 0) OVER last_90_days AS transfer_days_90d,
+        countIf(is_dispensary_stockout = 1) OVER last_365_days AS dispensary_stockout_days_365d,
+        avg(toFloat64(dispensary_on_hand_qty)) OVER last_30_days AS dispensary_avg_on_hand_30d,
+        min(dispensary_on_hand_qty) OVER last_30_days AS dispensary_min_on_hand_30d,
+        max(if(transfer_to_dispensary_qty > 0, position_date, NULL)) OVER history AS last_transfer_date,
+        max(if(is_dispensary_stockout = 1, position_date, NULL)) OVER history AS last_stockout_date,
         max(if(sold_qty > 0, position_date, NULL)) OVER history AS last_sale_date,
         max(if(has_purchase_receipt = 1, position_date, NULL)) OVER history AS last_receipt_date,
         row_number() OVER history - 1 AS history_days,
@@ -49,6 +61,9 @@ windowed AS (
         ),
         last_90_days AS (
             PARTITION BY dataset_name, product_id ORDER BY position_date ROWS BETWEEN 89 PRECEDING AND CURRENT ROW
+        ),
+        last_365_days AS (
+            PARTITION BY dataset_name, product_id ORDER BY position_date ROWS BETWEEN 364 PRECEDING AND CURRENT ROW
         ),
         {%- for horizon in horizons %}
         next_{{ horizon }}_days AS (
@@ -105,6 +120,33 @@ SELECT
     toUInt8(dispensary_stockout_days_90d) AS dispensary_stockout_days_90d,
     toUInt32(history_days) AS history_days,
     has_stocktake_90d,
+
+    -- Demand shape. Peak-day cover was the strongest stockout predictor in backtests.
+    sold_qty_std_90d,
+    sold_qty_max_90d,
+    if(avg_daily_sold_qty_90d > 0, sold_qty_std_90d / avg_daily_sold_qty_90d, NULL) AS demand_cv_90d,
+    if(avg_daily_sold_qty_90d > 0, toFloat64(sold_qty_7d) / (avg_daily_sold_qty_90d * 7), NULL) AS demand_trend_7_90,
+    if(
+        sold_qty_max_90d > 0,
+        toFloat64(greatest(dispensary_on_hand_qty, 0)) / toFloat64(sold_qty_max_90d),
+        NULL
+    ) AS dispensary_peak_cover_days,
+    sold_qty_365d,
+    toUInt16(sale_days_365d) AS sale_days_365d,
+
+    -- Replenishment rhythm over the last year and the dispensary refill pattern.
+    toUInt16(purchase_receipt_days_365d) AS purchase_receipt_days_365d,
+    if(
+        purchase_receipt_days_365d > 0,
+        toFloat64(purchase_received_qty_365d) / purchase_receipt_days_365d,
+        NULL
+    ) AS avg_purchase_receipt_qty_365d,
+    toUInt8(transfer_days_90d) AS transfer_days_90d,
+    toNullable(toUInt32(dateDiff('day', last_transfer_date, position_date))) AS days_since_last_transfer,
+    dispensary_avg_on_hand_30d,
+    dispensary_min_on_hand_30d,
+    toNullable(toUInt32(dateDiff('day', last_stockout_date, position_date))) AS days_since_last_stockout,
+    toUInt16(dispensary_stockout_days_365d) AS dispensary_stockout_days_365d,
 
     -- Eligibility. Consignment stock is supplied by its owner and is not purchased by the pharmacy.
     toUInt8(sold_qty_90d > 0) AS is_active_90d,

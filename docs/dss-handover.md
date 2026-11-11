@@ -26,6 +26,7 @@ Sales have no warehouse relationship. Inventory daily rows are observations, not
 | Staging types and normalization | [Staging models](../transform/dbt/models/staging/README.md) |
 | Reusable sales and inventory logic | [Intermediate models](../transform/dbt/models/intermediate/README.md) |
 | DSS-facing facts and dimensions | [Marts models](../transform/dbt/models/marts/README.md) |
+| MMS training and evaluation on pharmacy data | [Real-data evaluation](mms-real-data-evaluation.md) |
 | Dense position, DSS features and labels | [Replenishment marts](../transform/dbt/models/marts/replenishment/README.md) |
 | Governed conversion references | [dbt seed](../transform/dbt/seeds/README.md) |
 | Tests and regression procedures | [Test guide](../tests/README.md) |

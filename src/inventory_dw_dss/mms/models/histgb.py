@@ -6,6 +6,39 @@ from pathlib import Path
 from ..core.schemas import ArtifactError, as_date, finite
 
 
+def canonical_features(row):
+    return {"available_stock": row.available_stock, "sales_7d": row.sales_7d,
+            "sales_30d": row.sales_30d, "sales_90d": row.sales_90d,
+            "vel90": row.vel90, "dos": row.dos, "revenue_90d": row.revenue_90d,
+            "days_since_last_receipt": row.days_since_last_receipt}
+
+
+def feature_matrix(rows, names, allow_missing=False):
+    """Ordered feature vectors shared by training and inference.
+
+    allow_missing keeps absent values as NaN for HistGB's native missing-value
+    branch; it never substitutes zero. Without it, every feature must be finite.
+    """
+    values = []
+    for row in rows:
+        base = canonical_features(row)
+        if set(base) & set(row.features):
+            raise ArtifactError("Extra features may not override canonical feature values")
+        base.update(row.features)
+        vector = []
+        for name in names:
+            value = base.get(name)
+            if allow_missing and (value is None or (isinstance(value, float) and value != value)):
+                vector.append(float("nan"))
+                continue
+            try:
+                vector.append(finite(value, f"feature {name}"))
+            except ValueError as exc:
+                raise ArtifactError(str(exc)) from exc
+        values.append(vector)
+    return values
+
+
 class HistGBRiskModel:
     def __init__(self, model, manifest):
         self.model = model
@@ -66,22 +99,8 @@ class HistGBRiskModel:
         import numpy as np
         if not rows:
             return ()
-        values = []
-        for row in rows:
-            base = {"available_stock": row.available_stock, "sales_7d": row.sales_7d,
-                    "sales_30d": row.sales_30d, "sales_90d": row.sales_90d,
-                    "vel90": row.vel90, "dos": row.dos, "revenue_90d": row.revenue_90d,
-                    "days_since_last_receipt": row.days_since_last_receipt}
-            if set(base) & set(row.features):
-                raise ArtifactError("Extra features may not override canonical feature values")
-            base.update(row.features)
-            vector = []
-            for name in self.manifest["features"]:
-                try:
-                    vector.append(finite(base.get(name), f"feature {name}"))
-                except ValueError as exc:
-                    raise ArtifactError(str(exc)) from exc
-            values.append(vector)
+        values = feature_matrix(rows, self.manifest["features"],
+                                allow_missing=self.manifest.get("missing_values") == "native")
         probabilities = np.asarray(self.model.predict_proba(pd.DataFrame(values, columns=self.manifest["features"])))
         if probabilities.shape != (len(rows), 2) or not np.isfinite(probabilities).all():
             raise ArtifactError("Invalid artifact probability output")

@@ -45,7 +45,22 @@ assert [r.sku_id for r in result.review_list] == ["A", "B", "C"]
 assert [(r.sku_id, r.allocated_q) for r in result.order_proposal] == [("B", 14), ("C", 1)]
 ```
 
-Production UI configuration:
+## Pharmacy data (replenishment marts)
+
+`MMS_DATA_SOURCE=mart` reads `fct_product_replenishment_snapshot` and `fct_product_daily_position`
+built by dbt; no export step is needed. Snapshots contain products sold in the last 90 days.
+`available_stock` is pharmacy-wide (dispensary + storeroom) and drives order quantities;
+`point_of_sale_stock` is the dispensary balance that defines stockout incidents for training
+and backtests. Train with `--feature-set mart` and evaluate with `inventory-mms backtest`.
+Results and the iteration log are in [real-data evaluation](../../../docs/mms-real-data-evaluation.md).
+
+```bash
+export MMS_DATA_SOURCE=mart MMS_ARTIFACT_PATH=artifacts/pharmacy-mart-h14-v1/histgb.joblib \
+  MMS_MANIFEST_PATH=artifacts/pharmacy-mart-h14-v1/manifest.json
+uv run --locked --extra ui streamlit run src/inventory_dw_dss/mms/ui.py
+```
+
+Production UI configuration (normalized DuckDB export):
 
 ```powershell
 $env:MMS_DUCKDB_PATH = 'C:/exports/verified-mms.duckdb'

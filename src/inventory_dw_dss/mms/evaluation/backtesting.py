@@ -75,9 +75,13 @@ class Backtester:
         self.service = service
         self.outcomes = outcome_provider
 
-    def run(self, config, decision_dates, horizon_days=30):
+    def run(self, config, decision_dates, horizon_days=30, sop_scope="date"):
+        """sop_scope="date" drops a date when any window touches a stocktake (synthetic exports);
+        "sku" drops only the affected SKUs, for sources with routine per-product cycle counts."""
         if horizon_days not in (7, 14, 30) or type(horizon_days) is not int:
             raise MMSValidationError("Evaluation horizon must be 7, 14 or 30 days")
+        if sop_scope not in ("date", "sku"):
+            raise MMSValidationError("sop_scope must be date or sku")
         config = self.service._config(config)
         dates = sorted({as_date(t) for t in decision_dates})
         if not dates:
@@ -85,7 +89,7 @@ class Backtester:
         per_date = []
         for t in dates:
             row = {"analysis_date": str(t)}
-            if t == date(2025, 7, 31) and horizon_days == 30:
+            if sop_scope == "date" and t == date(2025, 7, 31) and horizon_days == 30:
                 per_date.append(dict(row, status="excluded_sop202508"))
                 continue
             snapshot = self.service.provider.get_snapshot(t)
@@ -96,7 +100,8 @@ class Backtester:
             except MMSValidationError as exc:
                 per_date.append(dict(row, status="incomplete", reason=str(exc)))
                 continue
-            if any(o.sop_day for days in future.values() for o in days):
+            sop_skus = {sku for sku, days in future.items() if any(o.sop_day for o in days)}
+            if sop_scope == "date" and sop_skus:
                 per_date.append(dict(row, status="excluded_sop"))
                 continue
             scores = self.service.executor.risk_scores(snapshot)
@@ -104,8 +109,10 @@ class Backtester:
                 "outcome_data_cutoff": str(self.outcomes.data_cutoff),
                 "outcome_start": str(t+timedelta(days=1)), "outcome_end": str(t+timedelta(days=horizon_days))}
             result = execute(snapshot, replace(config, analysis_date=t), scores, metadata)
-            # Incident-stockout ranking metrics exclude existing zero/negative balances.
-            cohort = [(r, score) for r, score in zip(snapshot.rows, scores) if r.available_stock > 0]
+            # Incident-stockout ranking metrics exclude existing zero/negative point-of-sale balances
+            # and, under per-SKU scope, windows corrected by a stocktake.
+            cohort = [(r, score) for r, score in zip(snapshot.rows, scores)
+                      if r.risk_stock > 0 and r.sku_id not in sop_skus]
             labels = [int(any(o.stockout for o in future[r.sku_id])) for r, _ in cohort]
             risk = risk_metrics(labels, [s for _, s in cohort], [r.sku_id for r, _ in cohort], config.top_k)
             actual = [sum(o.sales_quantity for o in future[r.sku_id]) for r in snapshot.rows]
@@ -120,7 +127,8 @@ class Backtester:
                 stockout_coverage=len(review_skus & new_stockout_skus)/len(new_stockout_skus) if new_stockout_skus else None)
             per_date.append(dict(row, status="evaluated", metadata=metadata,
                 demand=demand_metrics(actual, predicted), risk=risk, allocation=allocation,
-                existing_stockout_count=sum(r.available_stock == 0 for r in snapshot.rows),
+                existing_stockout_count=sum(r.risk_stock == 0 for r in snapshot.rows),
+                sop_excluded_sku_count=len(sop_skus) if sop_scope == "sku" else 0,
                 negative_balance_count=sum(r.available_stock < 0 for r in snapshot.rows),
                 new_stockout_count=sum(labels)))
         evaluated = [r for r in per_date if r["status"] == "evaluated"]

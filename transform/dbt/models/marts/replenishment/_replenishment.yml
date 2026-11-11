@@ -282,6 +282,68 @@ models:
         description: Whether a stocktake posting occurred in the 90 days ending at T.
         data_type: UInt8
 
+      - name: sold_qty_std_90d
+        description: Population standard deviation of daily sold quantity over the 90 days ending at T.
+        data_type: Float64
+
+      - name: sold_qty_max_90d
+        description: Largest daily sold quantity in the 90 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: demand_cv_90d
+        description: Coefficient of variation of daily sales over 90 days (std / mean). NULL without sales.
+        data_type: Nullable(Float64)
+
+      - name: demand_trend_7_90
+        description: Last-7-day sales relative to the 7-day MA90 expectation; above 1 means accelerating demand.
+        data_type: Nullable(Float64)
+
+      - name: dispensary_peak_cover_days
+        description: >-
+          Days the dispensary balance (floored at zero) lasts if every day matched the 90-day peak. NULL without
+          sales.
+        data_type: Nullable(Float64)
+
+      - name: sold_qty_365d
+        description: Sold quantity over the 365 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: sale_days_365d
+        description: Number of days with sales in the 365 days ending at T.
+        data_type: UInt16
+
+      - name: purchase_receipt_days_365d
+        description: Number of days with supplier receipts in the 365 days ending at T.
+        data_type: UInt16
+
+      - name: avg_purchase_receipt_qty_365d
+        description: Average supplier quantity per receipt day over 365 days, in the stock unit. NULL without receipts.
+        data_type: Nullable(Float64)
+
+      - name: transfer_days_90d
+        description: Number of days with storeroom-to-dispensary transfers in the 90 days ending at T.
+        data_type: UInt8
+
+      - name: days_since_last_transfer
+        description: Days from the latest transfer into the dispensary up to T. NULL if none occurred.
+        data_type: Nullable(UInt32)
+
+      - name: dispensary_avg_on_hand_30d
+        description: Average dispensary closing balance over the 30 days ending at T, in the stock unit.
+        data_type: Float64
+
+      - name: dispensary_min_on_hand_30d
+        description: Lowest dispensary closing balance over the 30 days ending at T, in the stock unit.
+        data_type: Decimal(38, 6)
+
+      - name: days_since_last_stockout
+        description: Days from the latest dispensary stockout up to T. NULL if the dispensary never ran out.
+        data_type: Nullable(UInt32)
+
+      - name: dispensary_stockout_days_365d
+        description: Number of dispensary stockout days in the 365 days ending at T.
+        data_type: UInt16
+
       - name: is_active_90d
         description: Whether the product sold anything in the 90 days ending at T.
         data_type: UInt8

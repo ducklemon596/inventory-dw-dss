@@ -6,6 +6,7 @@ import os
 from .core.schemas import MMSValidationError
 from .data.clickhouse_adapter import ClickHouseDataProvider, identifier
 from .data.duckdb_adapter import DuckDBDataProvider
+from .data.mart_adapter import ReplenishmentMartProvider
 from .demo import build_demo_service, demo_outcomes
 from .evaluation.backtesting import OutcomeProvider
 from .models.histgb import HistGBRiskModel
@@ -47,8 +48,8 @@ class SourceSettings:
             database=env.get("CLICKHOUSE_DB", "inventory_dw"), username=env.get("CLICKHOUSE_USER", "dbt"),
             password=env.get("CLICKHOUSE_PASSWORD", "dbt_local"), secure=secure in {"true", "1"},
             release_id=env.get("MMS_RELEASE_ID", ""))
-        if source not in {"demo", "duckdb", "clickhouse"}:
-            raise MMSValidationError("MMS_DATA_SOURCE must be demo, duckdb or clickhouse")
+        if source not in {"demo", "duckdb", "clickhouse", "mart"}:
+            raise MMSValidationError("MMS_DATA_SOURCE must be demo, duckdb, clickhouse or mart")
         return settings
 
     def connect_clickhouse(self):
@@ -77,6 +78,31 @@ class ManagedClickHouseProvider:
             return ClickHouseDataProvider(client, self.settings.database, self.settings.release_id).get_outcomes()
 
 
+class ManagedMartProvider:
+    """Reads the dbt replenishment marts with one short-lived client per call."""
+    def __init__(self, settings):
+        self.settings = settings
+
+    def get_snapshot(self, analysis_date, filters=None):
+        with closing(self.settings.connect_clickhouse()) as client:
+            return ReplenishmentMartProvider(client, self.settings.database).get_snapshot(analysis_date, filters)
+
+    def get_outcomes(self):
+        return _ManagedMartOutcomes(self.settings)
+
+
+class _ManagedMartOutcomes:
+    """Outcome windows opened lazily so long-lived apps do not hold a client."""
+    def __init__(self, settings):
+        self.settings = settings
+        with closing(settings.connect_clickhouse()) as client:
+            self.version, self.data_cutoff = ReplenishmentMartProvider(client, settings.database).data_version()
+
+    def window(self, t, sku_ids, horizon):
+        with closing(self.settings.connect_clickhouse()) as client:
+            return ReplenishmentMartProvider(client, self.settings.database).get_outcomes().window(t, sku_ids, horizon)
+
+
 def build_provider(settings):
     if settings.source == "duckdb":
         if not settings.duckdb_path:
@@ -87,6 +113,9 @@ def build_provider(settings):
         if not settings.release_id:
             raise MMSValidationError("ClickHouse source requires MMS_RELEASE_ID")
         return ManagedClickHouseProvider(settings)
+    if settings.source == "mart":
+        identifier(settings.database)
+        return ManagedMartProvider(settings)
     if settings.source == "demo":
         return build_demo_service().provider
     raise MMSValidationError("Unknown MMS source")
@@ -105,7 +134,7 @@ class MMSRuntime:
     def load_outcomes(self):
         if self.settings.source == "demo":
             return demo_outcomes()
-        if self.settings.source == "clickhouse":
+        if self.settings.source in {"clickhouse", "mart"}:
             return self.service.provider.get_outcomes()
         import duckdb
         try:

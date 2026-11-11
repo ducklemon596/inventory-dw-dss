@@ -64,6 +64,8 @@ class InventoryRow:
     flags: tuple[str, ...] = ()
     observed_stockout_days: int | None = None
     diagnostic_observed_days: int | None = None
+    # Stock at the point of sale when it differs from orderable stock (dispensary vs pharmacy).
+    point_of_sale_stock: float | None = None
 
     def __post_init__(self):
         if not isinstance(self.sku_id, str) or not self.sku_id or not self.stock_unit:
@@ -81,6 +83,8 @@ class InventoryRow:
             raise MMSValidationError("flags must be a sequence of strings")
         object.__setattr__(self, "flags", tuple(self.flags))
         finite(self.available_stock, "available_stock")
+        if self.point_of_sale_stock is not None:
+            finite(self.point_of_sale_stock, "point_of_sale_stock")
         for key in ("sales_7d", "sales_30d", "sales_90d"):
             finite(getattr(self, key), key, 0)
         if not self.sales_7d <= self.sales_30d <= self.sales_90d:
@@ -91,6 +95,11 @@ class InventoryRow:
         if self.available_stock < 0:
             object.__setattr__(self, "eligible", False)
             object.__setattr__(self, "flags", tuple(sorted(set(self.flags) | {"negative_stock"})))
+
+    @property
+    def risk_stock(self):
+        """Stock that defines a stockout incident; risk cohorts and labels use it."""
+        return self.available_stock if self.point_of_sale_stock is None else self.point_of_sale_stock
 
     @property
     def vel90(self):

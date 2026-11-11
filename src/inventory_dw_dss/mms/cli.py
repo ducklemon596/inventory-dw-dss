@@ -65,6 +65,16 @@ def main(argv=None):
     train.add_argument("--data-kind", choices=["synthetic", "verified"], required=True)
     train.add_argument("--horizon", type=int, default=7)
     train.add_argument("--seed", type=int, default=7)
+    train.add_argument("--feature-set", choices=["basic", "mart"], default="basic",
+                       help="basic: 4 canonical features; mart: replenishment mart features (MMS_DATA_SOURCE=mart)")
+    train.add_argument("--sop-scope", choices=["date", "sku"],
+                       help="Stocktake exclusion; defaults to date for basic and sku for mart")
+    backtest = commands.add_parser("backtest", help="Score historical dates with the configured artifact and report metrics")
+    backtest.add_argument("--dates", required=True, help="Comma-separated decision dates")
+    backtest.add_argument("--horizon", type=int, default=14)
+    backtest.add_argument("--profile", choices=PROFILES, default="RiskFirst")
+    backtest.add_argument("--top-k", type=int, default=50)
+    backtest.add_argument("--sop-scope", choices=["date", "sku"], default="sku")
     scenario = commands.add_parser("scenario")
     scenario.add_argument("--date", required=True)
     scenario.add_argument("--profile", choices=PROFILES, default="RiskFirst")
@@ -91,7 +101,19 @@ def main(argv=None):
             outcomes = MMSRuntime(MMSService(provider), settings).load_outcomes()
             payload = {"ok": True, "training": train_histgb(provider, outcomes,
                 [d.strip() for d in args.dates.split(",")], args.output, args.artifact_version,
-                data_kind=args.data_kind, horizon_days=args.horizon, seed=args.seed)}
+                data_kind=args.data_kind, horizon_days=args.horizon, seed=args.seed, features_name=args.feature_set,
+                sop_scope=args.sop_scope)}
+        elif args.command == "backtest":
+            from .evaluation.backtesting import Backtester
+            runtime = build_runtime()
+            dates = [d.strip() for d in args.dates.split(",")]
+            # pstar=0 ranks the whole cohort; ranking metrics use top-K regardless of threshold.
+            config = ScenarioConfig(dates[0], profile=args.profile, pstar=0, top_k=args.top_k)
+            report = Backtester(runtime.service, runtime.load_outcomes()).run(
+                config, dates, args.horizon, sop_scope=args.sop_scope)
+            payload = {"ok": True, "synthetic_demo": runtime.is_demo,
+                       "backtest": {"horizon_days": report.horizon_days, "aggregate": report.aggregate,
+                                    "per_date": [{k: v for k, v in r.items() if k != "metadata"} for r in report.per_date]}}
         elif args.command == "check-artifact":
             payload = {"ok": True, "artifact": check_artifact(args.artifact, args.manifest)}
         elif args.command == "audit-warehouse":

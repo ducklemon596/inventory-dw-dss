@@ -32,7 +32,11 @@ For example, a product with 3 units in the dispensary and 40 in the storeroom is
 | Coverage | `pharmacy_days_of_supply`, `dispensary_days_of_supply` | Days ≤ T |
 | Service history | days since last sale/receipt, receipt days, transfers, stockout days, stocktake flag, `history_days` | Days ≤ T |
 | Eligibility | `is_active_90d`, `has_full_history`, `is_orderable` | Days ≤ T |
+| Demand shape | `sold_qty_std_90d`, `sold_qty_max_90d`, `demand_cv_90d`, `demand_trend_7_90`, `dispensary_peak_cover_days`, `sold_qty_365d`, `sale_days_365d` | Days ≤ T |
+| Refill rhythm | `purchase_receipt_days_365d`, `avg_purchase_receipt_qty_365d`, `transfer_days_90d`, `days_since_last_transfer`, `dispensary_avg/min_on_hand_30d`, `days_since_last_stockout`, `dispensary_stockout_days_365d` | Days ≤ T |
 | Labels | `label_dispensary_stockout_{7,14,30}d`, `label_sold_qty_{h}d`, `label_window_has_stocktake_{h}d` | Days in (T, T+h] |
+
+The demand-shape and refill-rhythm groups were added after backtests showed they lift stockout ranking (`dispensary_peak_cover_days` is the strongest single predictor); see [MMS real-data evaluation](../../../../../docs/mms-real-data-evaluation.md). MMS reads this table directly with `MMS_DATA_SOURCE=mart`.
 
 Labels are NULL when T+h passes the export end, so incomplete windows cannot enter training as negatives. Features never read past T.
 
